@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="description" content="A simple live speech translation PWA powered by Gemini Live Translate." />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <title>Vox Live Translate</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <main class="app-shell">
+        <section class="translator" aria-labelledby="app-title">
+            <p class="eyebrow">Live speech translation</p>
+            <h1 id="app-title">Vox</h1>
+            <p class="lede">
+                Choose an output language, press the button, allow microphone access, and speak.
+                Vox streams your voice to Gemini Live Translate and plays the translated audio response.
+            </p>
+
+            <label class="field" for="language-select">
+                <span>Output language</span>
+                <select id="language-select" name="language">
+                    <option value="en">English</option>
+                    <option value="ru">Russian</option>
+                    <option value="de">German</option>
+                    <option value="uk">Ukrainian</option>
+                    <option value="sr">Serbian</option>
+                </select>
+            </label>
+
+            <button id="listen-button" class="primary-button" type="button">Start listening</button>
+            <p id="status" class="status" role="status" aria-live="polite">Ready.</p>
+        </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+</body>
+</html>

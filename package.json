@@ -1,0 +1,21 @@
+{
+  "name": "test-vox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/server.ts",
+    "build:client": "bun build ./src/client.ts --target=browser --outfile=./public/app.js",
+    "format": "./node_modules/@biomejs/cli-linux-x64/biome format --write .",
+    "lint": "./node_modules/@biomejs/cli-linux-x64/biome lint .",
+    "check": "./node_modules/@biomejs/cli-linux-x64/biome check ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "@google/genai": "^2.10.0",
+    "solid-js": "^1.9.14"
+  }
+}

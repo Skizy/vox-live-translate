@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "me.mestick.vox",
+      "sha256_cert_fingerprints": [
+        "48:08:61:DA:DA:23:31:0D:CA:BD:04:3A:D6:47:38:7C:8C:E4:D7:EB:4F:B8:AC:D6:70:D7:F7:7F:76:5E:03:05"
+      ]
+    }
+  }
+]

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Test Vox icon</title>
+  <desc id="desc">Blue rounded square with stylized white voice waves.</desc>
+  <rect width="512" height="512" rx="112" fill="#2563eb" />
+  <circle cx="256" cy="256" r="176" fill="#1d4ed8" />
+  <path d="M177 214c0-43.6 35.4-79 79-79s79 35.4 79 79v84c0 43.6-35.4 79-79 79s-79-35.4-79-79v-84Z" fill="#eff6ff" />
+  <path d="M221 216c0-19.3 15.7-35 35-35s35 15.7 35 35v80c0 19.3-15.7 35-35 35s-35-15.7-35-35v-80Z" fill="#60a5fa" />
+  <path d="M129 259c0 70.1 56.9 127 127 127s127-56.9 127-127" fill="none" stroke="#eff6ff" stroke-width="34" stroke-linecap="round" />
+  <path d="M256 386v55" stroke="#eff6ff" stroke-width="34" stroke-linecap="round" />
+</svg>
