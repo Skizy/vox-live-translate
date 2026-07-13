@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ./node_modules/vite/bin/vite.js",
-    "build": "bun ./node_modules/vite/bin/vite.js build",
-    "preview": "bun ./node_modules/vite/bin/vite.js preview",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "serve": "bun src/server.ts",
     "format": "bun ./node_modules/@biomejs/biome/bin/biome format --write .",
     "lint": "bun ./node_modules/@biomejs/biome/bin/biome lint .",
@@ -17,7 +17,7 @@
     "@biomejs/biome": "^2.5.2",
     "@types/bun": "latest",
     "typescript": "^7.0.2",
-    "vite": "^5.4.21",
+    "vite": "^8.1.4",
     "vite-plugin-solid": "^2.11.12"
   },
   "dependencies": {
