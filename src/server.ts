@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
+import { Elysia } from "elysia";
 
 const publicDir = new URL("../dist/", import.meta.url);
 const authRealm = "Test Vox";
@@ -125,35 +126,6 @@ async function createEphemeralToken() {
     }
 }
 
-function logRequest(request: Request, response: Response) {
-    const url = new URL(request.url);
-    console.log(`[${new Date().toISOString()}] ${request.method} ${url.pathname}${url.search} -> ${response.status}`);
-}
-
-async function handleRequest(request: Request) {
-    const url = new URL(request.url);
-
-    if (!isPublicPath(url.pathname)) {
-        if (!authUsername || !authPassword) {
-            return serverMisconfigured();
-        }
-
-        if (!isAuthorized(request)) {
-            return unauthorized();
-        }
-    }
-
-    if (url.pathname === "/api/get-ephemeral-token") {
-        if (request.method !== "POST") {
-            return jsonResponse({ error: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
-        }
-
-        return createEphemeralToken();
-    }
-
-    return serveStatic(url.pathname);
-}
-
 async function serveStatic(pathname: string) {
     const safePath = pathname === "/" ? "/index.html" : pathname;
     const filePath = new URL(`.${decodeURIComponent(safePath)}`, publicDir);
@@ -183,17 +155,33 @@ async function serveStatic(pathname: string) {
 
 const port = Number(process.env.PORT ?? 5080);
 
-Bun.serve({
-    port,
-    hostname: "127.0.0.1",
-    async fetch(request) {
-        const response = await handleRequest(request);
-        logRequest(request, response);
-        return response;
-    },
-});
+const app = new Elysia()
+    .onBeforeHandle(({ request }) => {
+        const pathname = new URL(request.url).pathname;
 
-console.log(`Vite production server running at http://localhost:${port}`);
+        if (isPublicPath(pathname)) {
+            return;
+        }
+
+        if (!authUsername || !authPassword) {
+            return serverMisconfigured();
+        }
+
+        if (!isAuthorized(request)) {
+            return unauthorized();
+        }
+    })
+    .all("/api/get-ephemeral-token", ({ request }) => {
+        if (request.method !== "POST") {
+            return jsonResponse({ error: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
+        }
+
+        return createEphemeralToken();
+    })
+    .all("/*", ({ request }) => serveStatic(new URL(request.url).pathname))
+    .listen({ hostname: "127.0.0.1", port });
+
+console.log(`Elysia server running at http://${app.server?.hostname}:${app.server?.port}`);
 console.log(
     authUsername && authPassword
         ? "Basic authentication is enabled."
