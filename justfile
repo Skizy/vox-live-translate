@@ -6,13 +6,17 @@ port := env("PORT", "5080")
 install:
     bun install
 
-# Serve the PWA locally
+# Start the Vite development server
 start:
-    PORT={{ port }} bun src/server.ts
+    bun run dev
 
-# Build the browser client bundle
-build-client:
-    bun run build:client
+# Create the production frontend bundle
+build:
+    bun run build
+
+# Serve the production bundle and authenticated API
+serve:
+    PORT={{ port }} bun run serve
 
 # Format code with Biome
 format:
@@ -25,3 +29,7 @@ lint:
 # Run Biome formatter and linter checks
 check:
     bun run check
+
+# Type-check the Vite application
+typecheck:
+    bun run typecheck

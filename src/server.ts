@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 
-const publicDir = new URL("../public/", import.meta.url);
+const publicDir = new URL("../dist/", import.meta.url);
 const authRealm = "Test Vox";
 const authUsername = process.env.BASIC_AUTH_USERNAME;
 const authPassword = process.env.BASIC_AUTH_PASSWORD;
@@ -193,7 +193,7 @@ Bun.serve({
     },
 });
 
-console.log(`PWA server running at http://localhost:${port}`);
+console.log(`Vite production server running at http://localhost:${port}`);
 console.log(
     authUsername && authPassword
         ? "Basic authentication is enabled."
