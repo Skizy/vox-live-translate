@@ -8,10 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "bun src/server.ts",
-    "format": "bun ./node_modules/@biomejs/biome/bin/biome format --write .",
-    "lint": "bun ./node_modules/@biomejs/biome/bin/biome lint .",
-    "check": "bun ./node_modules/@biomejs/biome/bin/biome check .",
-    "typecheck": "bun ./node_modules/typescript/bin/tsc -b"
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check .",
+    "typecheck": "tsc -b"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
