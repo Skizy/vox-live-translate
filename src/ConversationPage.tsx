@@ -6,9 +6,9 @@ const MODEL = "models/gemini-3.5-live-translate-preview";
 const INPUT_SAMPLE_RATE = 16_000;
 const OUTPUT_SAMPLE_RATE = 24_000;
 const INPUT_BUFFER_SIZE = 2048;
-const PLAYBACK_IDLE_GRACE_MS = 1_000;
+const SILENT_OUTGOING_AUDIO_DURATION_TO_END_TURN_MS = 3_000;
 
-type ConversationPhase = "listening" | "speaking" | "playing";
+type ConversationPhase = "listening" | "speaking" | "playing" | "ending-play";
 
 function bytesToBase64(bytes: Uint8Array) {
     let binary = "";
@@ -65,12 +65,12 @@ export default function ConversationPage() {
     const activePlaybackSources = new Set<AudioBufferSourceNode>();
     let playbackGeneration = 0;
     let conversationGeneration = 0;
-    let outgoingTranslationComplete = false;
-    let hasReceivedOutgoingAudio = false;
-    let playbackFinishedTimer: number | undefined;
+    let consecutiveSilentOutgoingAudioDurationMs = 0;
+    let lastNonSilentOutgoingAudioTime = 0;
+    let terminalSilenceTimer: number | undefined;
     let lastAudioRoutingLogTime = 0;
 
-    function sendAudio(session: Session | undefined, data: Uint8Array, direction: string) {
+    function sendRealtimeAudio(session: Session | undefined, data: Uint8Array, direction: string) {
         if (!session) {
             console.warn("[Vox] Audio frame was not sent: session is unavailable", { direction, phase: phase() });
             return;
@@ -84,38 +84,110 @@ export default function ConversationPage() {
         });
     }
 
-    function cancelScheduledListeningTransition() {
-        if (playbackFinishedTimer !== undefined) {
-            window.clearTimeout(playbackFinishedTimer);
-            playbackFinishedTimer = undefined;
+    function getSilentPcm24kDurationMs(base64Audio: string) {
+        const pcmBytes = base64ToBytes(base64Audio);
+
+        if (!pcmBytes.every((byte) => byte === 0)) {
+            return undefined;
+        }
+
+        return (pcmBytes.byteLength / (OUTPUT_SAMPLE_RATE * Int16Array.BYTES_PER_ELEMENT)) * 1_000;
+    }
+
+    function cancelTerminalSilenceTransition() {
+        console.log("[Vox] Cancelling terminal silence transition");
+
+        if (terminalSilenceTimer !== undefined) {
+            window.clearTimeout(terminalSilenceTimer);
+            terminalSilenceTimer = undefined;
         }
     }
 
-    function endAudioInput(session: Session | undefined, direction: string) {
-        if (!session) {
-            console.warn("[Vox] Audio stream end was not sent: session is unavailable", { direction, phase: phase() });
+    function flushQueuedOutgoingAudio() {
+        if (queuedOutgoingAudio.length === 0) {
             return;
         }
 
-        session.sendRealtimeInput({ audioStreamEnd: true });
+        const audioChunks = queuedOutgoingAudio;
+        queuedOutgoingAudio = [];
+        for (const audio of audioChunks) {
+            playPcm24k(audio);
+        }
     }
 
-    function scheduleListeningAfterPlayback() {
-        cancelScheduledListeningTransition();
+    function finishEndingPlayback() {
+        if (activePlaybackSources.size !== 0) {
+            return;
+        }
 
-        playbackFinishedTimer = window.setTimeout(() => {
-            playbackFinishedTimer = undefined;
-            if (phase() === "playing" && activePlaybackSources.size === 0) {
-                setPhase("listening");
-                setStatus("Listening to your companion.");
-            } else {
-                console.warn("[Vox] Kept microphone muted after playback timer", {
-                    phase: phase(),
-                    outgoingTranslationComplete,
-                    pendingPlaybackSources: activePlaybackSources.size,
-                });
+        if (queuedOutgoingAudio.length > 0) {
+            flushQueuedOutgoingAudio();
+            return;
+        }
+
+        if (phase() === "ending-play") {
+            setPhase("listening");
+            setStatus("Listening to your companion.");
+        }
+    }
+
+    function advancePlaybackQueue() {
+        if (activePlaybackSources.size !== 0) {
+            return;
+        }
+
+        if (queuedOutgoingAudio.length > 0) {
+            flushQueuedOutgoingAudio();
+            return;
+        }
+
+        if (phase() === "ending-play") {
+            finishEndingPlayback();
+        } else if (phase() === "playing") {
+            resumeListeningAfterTerminalSilence();
+        }
+    }
+
+    function beginEndingPlayback() {
+        if (phase() !== "playing") {
+            return;
+        }
+
+        cancelTerminalSilenceTransition();
+        setPhase("ending-play");
+        setStatus("Finishing translation playback…");
+        finishEndingPlayback();
+    }
+
+    function resumeListeningAfterTerminalSilence() {
+        if (
+            phase() !== "playing" ||
+            consecutiveSilentOutgoingAudioDurationMs < SILENT_OUTGOING_AUDIO_DURATION_TO_END_TURN_MS
+        ) {
+            return;
+        }
+
+        const quietDurationMs = performance.now() - lastNonSilentOutgoingAudioTime;
+        const remainingQuietDurationMs = Math.max(0, SILENT_OUTGOING_AUDIO_DURATION_TO_END_TURN_MS - quietDurationMs);
+        if (remainingQuietDurationMs === 0) {
+            beginEndingPlayback();
+            return;
+        }
+
+        if (terminalSilenceTimer !== undefined) {
+            return;
+        }
+
+        terminalSilenceTimer = window.setTimeout(() => {
+            terminalSilenceTimer = undefined;
+            if (
+                phase() === "playing" &&
+                consecutiveSilentOutgoingAudioDurationMs >= SILENT_OUTGOING_AUDIO_DURATION_TO_END_TURN_MS &&
+                performance.now() - lastNonSilentOutgoingAudioTime >= SILENT_OUTGOING_AUDIO_DURATION_TO_END_TURN_MS
+            ) {
+                beginEndingPlayback();
             }
-        }, PLAYBACK_IDLE_GRACE_MS);
+        }, remainingQuietDurationMs);
     }
 
     function playPcm24k(base64Audio: string) {
@@ -156,15 +228,7 @@ export default function ConversationPage() {
             }
 
             activePlaybackSources.delete(source);
-            if (phase() === "playing" && activePlaybackSources.size === 0) {
-                scheduleListeningAfterPlayback();
-            } else {
-                console.warn("[Vox] Playback ended but listening cannot resume yet", {
-                    phase: phase(),
-                    outgoingTranslationComplete,
-                    pendingPlaybackSources: activePlaybackSources.size,
-                });
-            }
+            advancePlaybackQueue();
         };
 
         const startAt = Math.max(outputAudioContext.currentTime, nextPlaybackTime);
@@ -173,18 +237,42 @@ export default function ConversationPage() {
         nextPlaybackTime = startAt + audioBuffer.duration;
     }
 
+    function observeIncomingAudioDuringPlayback(base64Audio: string) {
+        const silentDurationMs = getSilentPcm24kDurationMs(base64Audio);
+        if (silentDurationMs !== undefined) {
+            consecutiveSilentOutgoingAudioDurationMs += silentDurationMs;
+            console.info("[Vox] Received silent outgoing audio", {
+                consecutiveDurationMs: consecutiveSilentOutgoingAudioDurationMs,
+            });
+            resumeListeningAfterTerminalSilence();
+            return;
+        }
+
+        consecutiveSilentOutgoingAudioDurationMs = 0;
+        lastNonSilentOutgoingAudioTime = performance.now();
+        cancelTerminalSilenceTransition();
+    }
+
     function receiveOutgoingAudio(base64Audio: string) {
         const p = phase();
         if (p === "speaking") {
-            hasReceivedOutgoingAudio = true;
             queuedOutgoingAudio.push(base64Audio);
-        } else if (p === "playing") {
-            hasReceivedOutgoingAudio = true;
-            cancelScheduledListeningTransition();
-            playPcm24k(base64Audio);
-        } else {
-            console.warn("[Vox] Discarded outgoing translation audio outside an active turn", { phase: phase() });
+            return;
         }
+
+        if (p === "playing") {
+            queuedOutgoingAudio.push(base64Audio);
+            observeIncomingAudioDuringPlayback(base64Audio);
+            advancePlaybackQueue();
+            return;
+        }
+
+        if (p === "ending-play") {
+            console.info("[Vox] Discarded outgoing audio while ending playback");
+            return;
+        }
+
+        console.warn("[Vox] Discarded outgoing translation audio outside an active turn", { phase: p });
     }
 
     async function getEphemeralToken() {
@@ -279,32 +367,17 @@ export default function ConversationPage() {
                 receiveOutgoingAudio(inlineData.data);
             }
         }
-
-        if (message.serverContent?.turnComplete) {
-            console.info("[Vox] Outgoing translation turn complete", {
-                pendingPlaybackSources: activePlaybackSources.size,
-            });
-            outgoingTranslationComplete = true;
-            if (phase() === "playing" && hasReceivedOutgoingAudio && activePlaybackSources.size === 0) {
-                scheduleListeningAfterPlayback();
-            }
-        } else if (phase() === "playing") {
-            console.warn("[Vox] Awaiting Gemini turn-complete before re-enabling microphone");
-        }
     }
 
     function handleCompanionLanguageMessage(message: LiveServerMessage) {
         const text = message.serverContent?.outputTranscription?.text;
 
-        console.log("[Vox] Companion tranlation transcription: ", text);
+        console.debug("[Vox] Companion tranlation transcription: ", text);
 
         if (text) {
             console.info("[Vox] Received companion translation text", text);
             setCompanionTranslation((translation) => translation + text);
         }
-        // else if (message.serverContent?.turnComplete !== true) {
-        //     console.warn("[Vox] Companion translation message did not contain output transcription", message);
-        // }
     }
 
     async function requestMicrophoneAccess() {
@@ -347,17 +420,13 @@ export default function ConversationPage() {
 
         processorNode.onaudioprocess = (event) => {
             const p = phase();
-
-            if (p === "playing") {
-                return;
-            }
-
             const microphoneAudio = floatToInt16Pcm(event.inputBuffer.getChannelData(0));
+            const silenceAudio = new Uint8Array(microphoneAudio.byteLength);
 
             if (performance.now() - lastAudioRoutingLogTime > 1_000) {
                 lastAudioRoutingLogTime = performance.now();
                 console.debug("[Vox] Routing microphone audio", {
-                    phase: phase(),
+                    phase: p,
                     microphoneBytes: microphoneAudio.byteLength,
                     myLanguageSession: Boolean(myLanguageSession),
                     companionLanguageSession: Boolean(companionLanguageSession),
@@ -365,9 +434,14 @@ export default function ConversationPage() {
             }
 
             if (p === "speaking") {
-                sendAudio(myLanguageSession, microphoneAudio, "my to companion language");
+                sendRealtimeAudio(myLanguageSession, microphoneAudio, "my to companion language");
+                sendRealtimeAudio(companionLanguageSession, silenceAudio, "companion to my language");
+            } else if (p === "listening") {
+                sendRealtimeAudio(myLanguageSession, silenceAudio, "my to companion language");
+                sendRealtimeAudio(companionLanguageSession, microphoneAudio, "companion to my language");
             } else {
-                sendAudio(companionLanguageSession, microphoneAudio, "companion to my language");
+                sendRealtimeAudio(myLanguageSession, silenceAudio, "my to companion language");
+                sendRealtimeAudio(companionLanguageSession, silenceAudio, "companion to my language");
             }
         };
 
@@ -454,8 +528,9 @@ export default function ConversationPage() {
 
         console.info("[Vox] Started speaking");
         queuedOutgoingAudio = [];
-        outgoingTranslationComplete = false;
-        hasReceivedOutgoingAudio = false;
+        consecutiveSilentOutgoingAudioDurationMs = 0;
+        lastNonSilentOutgoingAudioTime = 0;
+        cancelTerminalSilenceTransition();
         setCompanionTranslation("");
         setPhase("speaking");
         setStatus("You are speaking. Release to hear the translation.");
@@ -469,24 +544,11 @@ export default function ConversationPage() {
 
         console.info("[Vox] Finished speaking", {
             queuedAudioChunks: queuedOutgoingAudio.length,
-            outgoingTranslationComplete,
         });
         setPhase("playing");
-        endAudioInput(myLanguageSession, "my to companion language");
         setStatus("Playing your translation…");
-        for (const audio of queuedOutgoingAudio) {
-            playPcm24k(audio);
-        }
-        queuedOutgoingAudio = [];
-
-        if (outgoingTranslationComplete && hasReceivedOutgoingAudio && activePlaybackSources.size === 0) {
-            scheduleListeningAfterPlayback();
-        } else {
-            console.warn("[Vox] Microphone remains muted while awaiting translated audio", {
-                outgoingTranslationComplete,
-                pendingPlaybackSources: activePlaybackSources.size,
-            });
-        }
+        flushQueuedOutgoingAudio();
+        advancePlaybackQueue();
     }
 
     function stopConversation() {
@@ -496,8 +558,6 @@ export default function ConversationPage() {
         const wasConversing = isConversing();
         setIsConversing(false);
         setPhase("listening");
-
-        cancelScheduledListeningTransition();
 
         for (const source of activePlaybackSources) {
             source.onended = null;
@@ -527,8 +587,9 @@ export default function ConversationPage() {
         processorNode = undefined;
         silentGainNode = undefined;
         queuedOutgoingAudio = [];
-        outgoingTranslationComplete = false;
-        hasReceivedOutgoingAudio = false;
+        consecutiveSilentOutgoingAudioDurationMs = 0;
+        lastNonSilentOutgoingAudioTime = 0;
+        cancelTerminalSilenceTransition();
         nextPlaybackTime = outputAudioContext?.currentTime ?? 0;
 
         if (wasConversing) {
