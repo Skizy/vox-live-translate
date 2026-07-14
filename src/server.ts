@@ -127,7 +127,7 @@ async function createEphemeralToken() {
 }
 
 async function serveStatic(pathname: string) {
-    const safePath = pathname === "/" ? "/index.html" : pathname;
+    const safePath = pathname === "/" || !pathname.match(/\.[^/]+$/) ? "/index.html" : pathname;
     const filePath = new URL(`.${decodeURIComponent(safePath)}`, publicDir);
 
     if (!filePath.href.startsWith(publicDir.href)) {

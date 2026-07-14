@@ -21,7 +21,7 @@
     "vite-plugin-solid": "^2.11.12"
   },
   "dependencies": {
-    "@google/genai": "^2.10.0",
+    "@google/genai": "^2.11.0",
     "elysia": "^1.4.29",
     "solid-js": "^1.9.14"
   }
