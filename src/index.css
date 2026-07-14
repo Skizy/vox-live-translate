@@ -311,7 +311,7 @@ h1 {
     .translator {
         display: flex;
         flex-direction: column;
-        justify-content: center;
+        justify-content: flex-start;
         min-height: 100svh;
         padding: max(1.25rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom));
         border: 0;
