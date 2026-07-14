@@ -702,8 +702,6 @@ export default function ConversationPage() {
                 <p class="status" role="status" aria-live="polite">
                     {status()}
                 </p>
-
-                <p>{phase()}</p>
             </section>
         </main>
     );
