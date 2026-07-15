@@ -218,6 +218,7 @@ h1 {
 
 .speaking-button {
     width: 100%;
+    touch-action: none;
     min-height: clamp(8rem, 24vw, 12rem);
     padding: 1.5rem;
     border-radius: 1.5rem;
