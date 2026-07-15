@@ -1,6 +1,5 @@
 const navigationItems = [
     { href: "/conversation", label: "Conversation" },
-    { href: "/history", label: "History" },
     { href: "/speech-to-text", label: "Speech to text" },
     { href: "/speech-to-speech", label: "Speech to speech" },
 ] as const;
@@ -24,6 +23,13 @@ export default function Navigation() {
                     </a>
                 ))}
             </div>
+            <a
+                classList={{ "navigation-link": true, "utility-link": true, active: pathname === "/history" }}
+                href="/history"
+                aria-current={pathname === "/history" ? "page" : undefined}
+            >
+                History
+            </a>
         </nav>
     );
 }
