@@ -1,11 +1,11 @@
 import { GoogleGenAI, type LiveServerMessage, Modality, type Session } from "@google/genai";
 import { createSignal, onCleanup } from "solid-js";
+import { createMicrophoneCaptureNodes } from "./liveTranslation";
 import Navigation from "./Navigation";
 
 const MODEL = "models/gemini-3.5-live-translate-preview";
 const INPUT_SAMPLE_RATE = 16_000;
 const OUTPUT_SAMPLE_RATE = 24_000;
-const INPUT_BUFFER_SIZE = 2048;
 const SILENT_OUTGOING_AUDIO_DURATION_TO_END_TURN_MS = 3_000;
 
 type ConversationPhase = "listening" | "speaking" | "playing" | "ending-play";
@@ -32,17 +32,6 @@ function base64ToBytes(base64: string) {
     return bytes;
 }
 
-function floatToInt16Pcm(float32Data: Float32Array) {
-    const int16Buffer = new Int16Array(float32Data.length);
-
-    for (let index = 0; index < float32Data.length; index += 1) {
-        const sample = Math.max(-1, Math.min(1, float32Data[index] ?? 0));
-        int16Buffer[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-    }
-
-    return new Uint8Array(int16Buffer.buffer);
-}
-
 export default function ConversationPage() {
     const [status, setStatus] = createSignal("Ready to start a conversation.");
     const [myLanguageCode, setMyLanguageCode] = createSignal("ru");
@@ -58,7 +47,7 @@ export default function ConversationPage() {
     let inputAudioContext: AudioContext | undefined;
     let outputAudioContext: AudioContext | undefined;
     let sourceNode: MediaStreamAudioSourceNode | undefined;
-    let processorNode: ScriptProcessorNode | undefined;
+    let processorNode: AudioWorkletNode | undefined;
     let silentGainNode: GainNode | undefined;
     let nextPlaybackTime = 0;
     let queuedOutgoingAudio: string[] = [];
@@ -413,45 +402,42 @@ export default function ConversationPage() {
         await inputAudioContext.resume();
         await outputAudioContext.resume();
 
-        sourceNode = inputAudioContext.createMediaStreamSource(microphoneStream);
-        processorNode = inputAudioContext.createScriptProcessor(INPUT_BUFFER_SIZE, 1, 1);
-        silentGainNode = inputAudioContext.createGain();
-        silentGainNode.gain.value = 0;
+        const microphoneCapture = await createMicrophoneCaptureNodes(
+            inputAudioContext,
+            microphoneStream,
+            (microphoneAudio) => {
+                const p = phase();
+                const silenceAudio = new Uint8Array(microphoneAudio.byteLength);
 
-        processorNode.onaudioprocess = (event) => {
-            const p = phase();
-            const microphoneAudio = floatToInt16Pcm(event.inputBuffer.getChannelData(0));
-            const silenceAudio = new Uint8Array(microphoneAudio.byteLength);
+                if (performance.now() - lastAudioRoutingLogTime > 1_000) {
+                    lastAudioRoutingLogTime = performance.now();
+                    console.debug("[Vox] Routing microphone audio", {
+                        phase: p,
+                        microphoneBytes: microphoneAudio.byteLength,
+                        myLanguageSession: Boolean(myLanguageSession),
+                        companionLanguageSession: Boolean(companionLanguageSession),
+                    });
+                }
 
-            if (performance.now() - lastAudioRoutingLogTime > 1_000) {
-                lastAudioRoutingLogTime = performance.now();
-                console.debug("[Vox] Routing microphone audio", {
-                    phase: p,
-                    microphoneBytes: microphoneAudio.byteLength,
-                    myLanguageSession: Boolean(myLanguageSession),
-                    companionLanguageSession: Boolean(companionLanguageSession),
-                });
-            }
-
-            if (p === "speaking") {
-                sendRealtimeAudio(myLanguageSession, microphoneAudio, "my to companion language");
-                sendRealtimeAudio(companionLanguageSession, silenceAudio, "companion to my language");
-            } else if (p === "listening") {
-                sendRealtimeAudio(myLanguageSession, silenceAudio, "my to companion language");
-                sendRealtimeAudio(companionLanguageSession, microphoneAudio, "companion to my language");
-            } else {
-                sendRealtimeAudio(myLanguageSession, silenceAudio, "my to companion language");
-                sendRealtimeAudio(companionLanguageSession, silenceAudio, "companion to my language");
-            }
-        };
-
-        sourceNode.connect(processorNode);
-        processorNode.connect(silentGainNode);
+                if (p === "speaking") {
+                    sendRealtimeAudio(myLanguageSession, microphoneAudio, "my to companion language");
+                    sendRealtimeAudio(companionLanguageSession, silenceAudio, "companion to my language");
+                } else if (p === "listening") {
+                    sendRealtimeAudio(myLanguageSession, silenceAudio, "my to companion language");
+                    sendRealtimeAudio(companionLanguageSession, microphoneAudio, "companion to my language");
+                } else {
+                    sendRealtimeAudio(myLanguageSession, silenceAudio, "my to companion language");
+                    sendRealtimeAudio(companionLanguageSession, silenceAudio, "companion to my language");
+                }
+            },
+        );
+        sourceNode = microphoneCapture.source;
+        processorNode = microphoneCapture.processor;
+        silentGainNode = microphoneCapture.silentGain;
         console.info("[Vox] Microphone stream started", {
             sampleRate: inputAudioContext.sampleRate,
             tracks: microphoneStream.getAudioTracks().map((track) => track.label),
         });
-        silentGainNode.connect(inputAudioContext.destination);
     }
 
     async function startConversation() {
@@ -566,7 +552,10 @@ export default function ConversationPage() {
         }
         activePlaybackSources.clear();
 
-        processorNode?.disconnect();
+        if (processorNode) {
+            processorNode.port.onmessage = null;
+            processorNode.disconnect();
+        }
         sourceNode?.disconnect();
         silentGainNode?.disconnect();
         microphoneStream?.getTracks().forEach((track) => {

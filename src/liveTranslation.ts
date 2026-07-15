@@ -4,6 +4,12 @@ export const MODEL = "models/gemini-3.5-live-translate-preview";
 export const INPUT_SAMPLE_RATE = 16_000;
 export const INPUT_BUFFER_SIZE = 2048;
 
+export type MicrophoneCaptureNodes = {
+    source: MediaStreamAudioSourceNode;
+    processor: AudioWorkletNode;
+    silentGain: GainNode;
+};
+
 function bytesToBase64(bytes: Uint8Array) {
     let binary = "";
     const chunkSize = 0x8000;
@@ -57,21 +63,42 @@ export async function requestMicrophoneStream() {
     });
 }
 
-export async function startMicrophoneCapture(stream: MediaStream, onAudio: (audio: Uint8Array) => void) {
-    const audioContext = new AudioContext({ sampleRate: INPUT_SAMPLE_RATE });
+export async function createMicrophoneCaptureNodes(
+    audioContext: AudioContext,
+    stream: MediaStream,
+    onAudio: (audio: Uint8Array) => void,
+): Promise<MicrophoneCaptureNodes> {
+    await audioContext.audioWorklet.addModule(new URL("./audio/microphone-capture-processor.js", import.meta.url));
+
     const source = audioContext.createMediaStreamSource(stream);
-    const processor = audioContext.createScriptProcessor(INPUT_BUFFER_SIZE, 1, 1);
+    const processor = new AudioWorkletNode(audioContext, "microphone-capture", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        channelCount: 1,
+        channelCountMode: "explicit",
+        processorOptions: { frameSize: INPUT_BUFFER_SIZE },
+    });
     const silentGain = audioContext.createGain();
-    let stopped = false;
 
     silentGain.gain.value = 0;
-    processor.onaudioprocess = (event) => {
-        onAudio(floatToInt16Pcm(event.inputBuffer.getChannelData(0)));
+    processor.port.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+            onAudio(floatToInt16Pcm(new Float32Array(event.data)));
+        }
     };
 
     source.connect(processor);
     processor.connect(silentGain);
     silentGain.connect(audioContext.destination);
+
+    return { source, processor, silentGain };
+}
+
+export async function startMicrophoneCapture(stream: MediaStream, onAudio: (audio: Uint8Array) => void) {
+    const audioContext = new AudioContext({ sampleRate: INPUT_SAMPLE_RATE });
+    const { source, processor, silentGain } = await createMicrophoneCaptureNodes(audioContext, stream, onAudio);
+    let stopped = false;
+
     await audioContext.resume();
 
     return () => {
@@ -80,7 +107,7 @@ export async function startMicrophoneCapture(stream: MediaStream, onAudio: (audi
         }
 
         stopped = true;
-        processor.onaudioprocess = null;
+        processor.port.onmessage = null;
         processor.disconnect();
         source.disconnect();
         silentGain.disconnect();
