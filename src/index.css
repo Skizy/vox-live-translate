@@ -339,3 +339,122 @@ h1 {
         max-width: none;
     }
 }
+
+.history-page,
+.conversation-history-detail {
+    padding: clamp(2rem, 5vw, 3.5rem);
+}
+
+.history-page h1,
+.conversation-history-detail h1 {
+    font-size: clamp(2.5rem, 8vw, 4.5rem);
+}
+
+.history-list,
+.chat-messages {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.history-item {
+    display: grid;
+    gap: 0.3rem;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid rgba(96, 165, 250, 0.32);
+    border-radius: 1rem;
+    background: rgba(30, 41, 59, 0.7);
+    color: #f8fafc;
+    text-decoration: none;
+    transition:
+        transform 160ms ease,
+        border-color 160ms ease,
+        background 160ms ease;
+}
+
+.history-item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96, 165, 250, 0.78);
+    background: rgba(30, 41, 59, 0.95);
+}
+
+.history-item:focus-visible,
+.back-link:focus-visible {
+    outline: 4px solid rgba(96, 165, 250, 0.44);
+    outline-offset: 4px;
+}
+
+.history-item-date,
+.history-item span,
+.empty-history,
+.chat-message-translation,
+.chat-message-sender {
+    color: #94a3b8;
+}
+
+.history-item-date,
+.chat-message-sender {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.empty-history {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 1.5rem;
+    color: #93c5fd;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.chat-messages {
+    margin-top: 2rem;
+}
+
+.chat-message {
+    justify-self: start;
+    max-width: min(85%, 38rem);
+    padding: 0.9rem 1.05rem;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 1.1rem 1.1rem 1.1rem 0.3rem;
+    background: rgba(30, 41, 59, 0.78);
+}
+
+.chat-message.mine {
+    justify-self: end;
+    border-color: rgba(96, 165, 250, 0.5);
+    border-radius: 1.1rem 1.1rem 0.3rem;
+    background: rgba(37, 99, 235, 0.28);
+}
+
+.chat-message p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.chat-message-sender {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.chat-message p.chat-message-translation {
+    margin-top: 0.3rem;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 520px) {
+    .history-page,
+    .conversation-history-detail {
+        padding: max(1.25rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom));
+    }
+
+    .chat-message {
+        max-width: 92%;
+    }
+}

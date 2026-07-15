@@ -2,6 +2,7 @@ import { type LiveServerMessage, Modality, type Session } from "@google/genai";
 import { createSignal, onCleanup } from "solid-js";
 import { createMicrophoneCaptureNodes } from "../audio/microphone";
 import { bytesToBase64, INPUT_SAMPLE_RATE } from "../audio/pcm";
+import { createConversationHistory } from "./conversationHistory";
 import { connectLiveTranslate, getEphemeralToken } from "./liveTranslate";
 import type { ConversationPhase } from "./types";
 import { usePcmPlayback } from "./usePcmPlayback";
@@ -24,6 +25,7 @@ export function useConversation() {
     let processorNode: AudioWorkletNode | undefined;
     let silentGainNode: GainNode | undefined;
     let conversationGeneration = 0;
+    let history: ReturnType<typeof createConversationHistory> | undefined;
     let lastAudioRoutingLogTime = 0;
 
     function sendRealtimeAudio(session: Session | undefined, data: Uint8Array, direction: string) {
@@ -34,7 +36,14 @@ export function useConversation() {
         session.sendRealtimeInput({ audio: { mimeType: "audio/pcm;rate=16000", data: bytesToBase64(data) } });
     }
 
+    function recordTranscriptions(message: LiveServerMessage, side: "me" | "companion") {
+        const { inputTranscription, outputTranscription } = message.serverContent ?? {};
+        if (inputTranscription?.text) history?.addInput(side, inputTranscription.text);
+        if (outputTranscription?.text) history?.addOutput(side, outputTranscription.text);
+    }
+
     function handleMyLanguageMessage(message: LiveServerMessage) {
+        recordTranscriptions(message, "me");
         for (const part of message.serverContent?.modelTurn?.parts ?? []) {
             const inlineData = part.inlineData;
             if (inlineData?.mimeType?.startsWith("audio/pcm") && inlineData.data) playback.receive(inlineData.data);
@@ -42,6 +51,7 @@ export function useConversation() {
     }
 
     function handleCompanionLanguageMessage(message: LiveServerMessage) {
+        recordTranscriptions(message, "companion");
         const text = message.serverContent?.outputTranscription?.text;
         if (text) setCompanionTranslation((translation) => translation + text);
     }
@@ -88,6 +98,7 @@ export function useConversation() {
 
     async function startConversation() {
         const generation = ++conversationGeneration;
+        history = createConversationHistory(myLanguageCode(), companionLanguageCode());
         setIsConnecting(true);
         try {
             setStatus("Requesting microphone access…");

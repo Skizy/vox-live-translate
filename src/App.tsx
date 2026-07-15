@@ -1,4 +1,6 @@
 import { onMount } from "solid-js";
+import ConversationHistoryDetailPage from "./ConversationHistoryDetailPage";
+import ConversationHistoryPage from "./ConversationHistoryPage";
 import ConversationPage from "./ConversationPage";
 import HomePage from "./HomePage";
 import SpeechToSpeechPage from "./SpeechToSpeechPage";
@@ -19,11 +21,16 @@ export default function App() {
     switch (window.location.pathname) {
         case "/conversation":
             return <ConversationPage />;
+        case "/history":
+            return <ConversationHistoryPage />;
         case "/speech-to-text":
             return <SpeechToTextPage />;
         case "/speech-to-speech":
             return <SpeechToSpeechPage />;
         default:
+            if (window.location.pathname.startsWith("/history/")) {
+                return <ConversationHistoryDetailPage />;
+            }
             return <HomePage />;
     }
 }

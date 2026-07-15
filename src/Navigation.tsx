@@ -1,5 +1,6 @@
 const navigationItems = [
     { href: "/conversation", label: "Conversation" },
+    { href: "/history", label: "History" },
     { href: "/speech-to-text", label: "Speech to text" },
     { href: "/speech-to-speech", label: "Speech to speech" },
 ] as const;
