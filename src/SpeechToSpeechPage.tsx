@@ -1,16 +1,9 @@
 import { GoogleGenAI, Modality, type Session } from "@google/genai";
 import { createSignal, onCleanup } from "solid-js";
-import {
-    base64ToBytes,
-    getEphemeralToken,
-    MODEL,
-    requestMicrophoneStream,
-    sendMicrophoneAudio,
-    startMicrophoneCapture,
-} from "./liveTranslation";
+import { requestMicrophoneStream, sendMicrophoneAudio, startMicrophoneCapture } from "./audio/microphone";
+import { base64ToBytes, OUTPUT_SAMPLE_RATE } from "./audio/pcm";
+import { getEphemeralToken, MODEL } from "./liveTranslation";
 import Navigation from "./Navigation";
-
-const OUTPUT_SAMPLE_RATE = 24_000;
 
 const languageOptions = [
     ["en", "English"],

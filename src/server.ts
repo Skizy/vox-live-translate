@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 import { Elysia } from "elysia";
@@ -73,13 +74,7 @@ function isAuthorized(request: Request) {
     }
 
     const encodedCredentials = authorization.slice("Basic ".length).trim();
-    let credentials: string;
-
-    try {
-        credentials = atob(encodedCredentials);
-    } catch {
-        return false;
-    }
+    const credentials = Buffer.from(encodedCredentials, "base64").toString("utf8");
 
     const separator = credentials.indexOf(":");
 

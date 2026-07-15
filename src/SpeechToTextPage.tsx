@@ -1,12 +1,7 @@
 import { GoogleGenAI, Modality, type Session } from "@google/genai";
 import { createSignal, onCleanup } from "solid-js";
-import {
-    getEphemeralToken,
-    MODEL,
-    requestMicrophoneStream,
-    sendMicrophoneAudio,
-    startMicrophoneCapture,
-} from "./liveTranslation";
+import { requestMicrophoneStream, sendMicrophoneAudio, startMicrophoneCapture } from "./audio/microphone";
+import { getEphemeralToken, MODEL } from "./liveTranslation";
 import Navigation from "./Navigation";
 
 const languageOptions = [
