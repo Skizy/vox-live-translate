@@ -33,3 +33,7 @@ check:
 # Type-check the Vite application
 typecheck:
     bun run typecheck
+
+# Regenerate PWA PNG icons from the theme palette
+generate-icons:
+    python3 scripts/generate-icons.py
