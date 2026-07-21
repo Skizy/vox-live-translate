@@ -25,3 +25,8 @@ format:
 # Run Biome formatter and linter checks
 check:
     bun run check
+
+# Build, upload, and restart the production app on cont
+# Set DEPLOY_HOST, DEPLOY_DIR, or PORT to override the defaults.
+deploy:
+    ./scripts/deploy.sh
