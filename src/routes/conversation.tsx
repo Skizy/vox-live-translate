@@ -1,7 +1,7 @@
-import { ConversationControls } from "./conversation/ConversationControls";
-import { LanguageFields } from "./conversation/LanguageFields";
-import { useConversation } from "./conversation/useConversation";
-import Navigation from "./Navigation";
+import Navigation from "~/components/Navigation";
+import { ConversationControls } from "~/features/conversation/ConversationControls";
+import { LanguageFields } from "~/features/conversation/LanguageFields";
+import { useConversation } from "~/features/conversation/useConversation";
 
 export default function ConversationPage() {
     const conversation = useConversation();

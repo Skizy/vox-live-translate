@@ -1,28 +1,28 @@
 {
-  "name": "test-vox",
-  "version": "0.1.0",
-  "private": true,
+  "name": "vox-solidstart",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite dev",
     "build": "vite build",
+    "start": "bun .output/server/index.mjs",
     "preview": "vite preview",
-    "serve": "bun src/server.ts",
+    "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
-    "lint": "biome lint .",
-    "check": "biome check .",
-    "typecheck": "tsc -b"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.2",
-    "@types/bun": "latest",
-    "typescript": "^7.0.2",
-    "vite": "^8.1.4",
-    "vite-plugin-solid": "^2.11.12"
+    "check": "biome check ."
   },
   "dependencies": {
-    "@google/genai": "^2.11.0",
-    "elysia": "^1.4.29",
-    "solid-js": "^1.9.14"
+    "@google/genai": "^2.12.0",
+    "@solidjs/meta": "^0.29.4",
+    "@solidjs/router": "^0.16.2",
+    "@solidjs/start": "^2.0.0-beta.0",
+    "nitro": "^3.0.260610-beta",
+    "solid-js": "^1.9.5",
+    "vite": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.4"
   }
 }

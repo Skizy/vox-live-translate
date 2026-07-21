@@ -1,50 +1,35 @@
-# Test Vox
+# Vox SolidStart
 
-A SolidJS PWA for live speech translation with Gemini Live Translate. The frontend is built with Vite; Bun hosts the production bundle and the authenticated endpoint that creates short-lived Gemini tokens.
+A SolidStart v2 refactor of Vox, a Solid PWA for live speech translation with Gemini Live Translate.
 
-## Development
+## Architecture
 
-```bash
+- `src/routes/` uses SolidStart's idiomatic file-based router for UI and API routes.
+- `src/features/`, `src/components/`, and `src/lib/` contain browser-side translation features.
+- `src/server/auth.ts` implements the in-memory mock user/session database used by the Google Identity Services callback.
+- `public/` contains the PWA manifest, service worker, Android asset links, and icons.
+
+The Google Identity Services client uses redirect UX and posts to `POST /auth-callback`. SolidStart route handlers provide `/api/auth-config`, `/api/get-ephemeral-token`, and `POST /auth/logout`.
+
+## Setup
+
+Create `.env` with:
+
+```env
+GOOGLE_CLIENT_ID=123456789012-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com
+GEMINI_API_KEY=your-server-side-key
+```
+
+`GOOGLE_CLIENT_ID` must be the complete OAuth web-client ID, including `.apps.googleusercontent.com`. The mock database and sessions are volatile and reset whenever the server restarts.
+
+## Commands
+
+```sh
 just install
+just dev
+just build
 just start
+just typecheck
 ```
 
-`just start` runs the Vite development server. The production API is not provided by Vite, so start the Bun service separately when developing functionality that requests a Gemini token:
-
-```bash
-just build
-just serve
-```
-
-## Production
-
-Build the frontend and serve the generated `dist/` directory:
-
-```bash
-just build
-just serve
-```
-
-The Bun server serves the Vite build and handles `POST /api/get-ephemeral-token`. It expects these environment variables:
-
-- `BASIC_AUTH_USERNAME`
-- `BASIC_AUTH_PASSWORD`
-- `GEMINI_API_KEY`
-
-Copy `.env.example` to `.env`, then provide strong Basic Auth credentials and a server-side Gemini API key. The long-lived Gemini key is never exposed to the browser.
-
-## Project actions
-
-```bash
-just install  # install dependencies
-just start    # run Vite's development server
-just build    # create dist/
-just serve    # host dist/ and the authenticated API with Bun
-just check    # run Biome checks
-```
-
-## PWA and TWA assets
-
-Files in `public/` are copied unchanged to `dist/` by Vite. This includes the web manifest, service worker, Android asset links, and icons required by the PWA/TWA integration.
-
-For production, serve the application over HTTPS and keep `public/.well-known/assetlinks.json`, `public/manifest.json`, and the Android signing configuration aligned.
+The generated production server is a Nitro Node-compatible application and is launched with Bun by `just start`.

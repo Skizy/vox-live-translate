@@ -1,6 +1,7 @@
+import { A } from "@solidjs/router";
 import { createMemo, For, Show } from "solid-js";
-import { getConversationHistory } from "./conversation/conversationHistory";
-import Navigation from "./Navigation";
+import Navigation from "~/components/Navigation";
+import { getConversationHistory } from "~/features/conversation/conversationHistory";
 
 function formatConversationDate(timestamp: number) {
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
@@ -22,7 +23,7 @@ export default function ConversationHistoryPage() {
                     <div class="history-list">
                         <For each={conversations()}>
                             {(conversation) => (
-                                <a class="history-item" href={`/history/${conversation.timestamp}`}>
+                                <A class="history-item" href={`/history/${conversation.timestamp}`}>
                                     <span class="history-item-date">
                                         {formatConversationDate(conversation.timestamp)}
                                     </span>
@@ -31,7 +32,7 @@ export default function ConversationHistoryPage() {
                                         {conversation.companionLanguage.toUpperCase()}
                                     </strong>
                                     <span>{conversation.conversation.length} messages</span>
-                                </a>
+                                </A>
                             )}
                         </For>
                     </div>

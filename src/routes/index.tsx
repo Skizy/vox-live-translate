@@ -1,3 +1,5 @@
+import { A } from "@solidjs/router";
+
 const translationModes = [
     {
         href: "/conversation",
@@ -25,10 +27,10 @@ export default function HomePage() {
                 <p class="lede">Choose the translation experience that fits your conversation.</p>
                 <div class="mode-links">
                     {translationModes.map(({ href, title, description }) => (
-                        <a class="mode-link" href={href}>
+                        <A class="mode-link" href={href}>
                             <strong>{title}</strong>
                             <span>{description}</span>
-                        </a>
+                        </A>
                     ))}
                 </div>
             </section>

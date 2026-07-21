@@ -1,12 +1,7 @@
+import { A, useParams } from "@solidjs/router";
 import { createMemo, For, Show } from "solid-js";
-import { type ConversationMessage, getConversationHistory } from "./conversation/conversationHistory";
-import Navigation from "./Navigation";
-
-function getTimestamp() {
-    const pathParts = window.location.pathname.split("/");
-    const timestamp = Number(pathParts[pathParts.length - 1]);
-    return Number.isSafeInteger(timestamp) ? timestamp : undefined;
-}
+import Navigation from "~/components/Navigation";
+import { type ConversationMessage, getConversationHistory } from "~/features/conversation/conversationHistory";
 
 function getMessageText(message: ConversationMessage) {
     return message.side === "me"
@@ -15,17 +10,21 @@ function getMessageText(message: ConversationMessage) {
 }
 
 export default function ConversationHistoryDetailPage() {
-    const conversation = createMemo(() =>
-        getConversationHistory().find(({ timestamp }) => timestamp === getTimestamp()),
-    );
+    const params = useParams<{ timestamp: string }>();
+    const conversation = createMemo(() => {
+        const timestamp = Number(params.timestamp);
+        return Number.isSafeInteger(timestamp)
+            ? getConversationHistory().find((savedConversation) => savedConversation.timestamp === timestamp)
+            : undefined;
+    });
 
     return (
         <main class="app-shell">
             <Navigation />
             <section class="translator conversation-history-detail" aria-labelledby="conversation-title">
-                <a class="back-link" href="/history">
+                <A class="back-link" href="/history">
                     ← All conversations
-                </a>
+                </A>
                 <Show
                     when={conversation()}
                     fallback={

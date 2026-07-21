@@ -1,6 +1,7 @@
+import { solidStart } from "@solidjs/start/config";
+import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
-import solid from "vite-plugin-solid";
 
 export default defineConfig({
-    plugins: [solid()],
+    plugins: [solidStart({ middleware: "./src/middleware.ts" }), nitro()],
 });
