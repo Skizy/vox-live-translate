@@ -37,9 +37,9 @@ The generated production server is a Nitro Node-compatible application and is la
 
 ## Deployment
 
-`just deploy` builds the app locally, compresses `.output` into a tarball, uploads it over SCP, and restarts it with Bun on `cont` at `~/deploy/vox-live-translate`. The remote server must have Bun and `tar` installed. Its output is appended to `server.log`, and its PID is stored in `server.pid`.
+`just deploy` builds the app locally, compresses `.output` and the runtime `Dockerfile` into a tarball, uploads it over SCP, and builds/runs the `vox-live-translate` Docker container on `cont` at `~/deploy/vox-live-translate`. The remote server must have Docker and `tar` installed. The container is configured with `--restart unless-stopped`, uses the remote `.env` file, and publishes the selected port (default `5080`) only on `127.0.0.1` for Nginx to proxy.
 
-If a local `.env` exists, deployment uploads it to the remote deployment directory. Otherwise, the existing remote `.env` is retained. The running server reads that file before it starts. Override the destination or port when needed:
+If a local `.env` exists, deployment uploads it to the remote deployment directory. Otherwise, an existing remote `.env` is retained; deployment stops with a clear error if neither exists. Inspect a deployed server with `ssh cont 'docker logs --tail 100 vox-live-translate'`. Override the destination or port when needed:
 
 ```sh
 DEPLOY_HOST=cont DEPLOY_DIR=~/deploy/vox-live-translate PORT=3000 just deploy

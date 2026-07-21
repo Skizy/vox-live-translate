@@ -31,7 +31,7 @@ STAGING_DIR="$REMOTE_DIR/.incoming-$$"
 ARCHIVE=$(mktemp "${TMPDIR:-/tmp}/vox-live-translate.XXXXXX.tar.gz")
 
 # A single compressed transfer avoids per-file SCP overhead for build assets.
-tar -czf "$ARCHIVE" .output
+tar -czf "$ARCHIVE" .output Dockerfile
 
 ssh "$HOST" "mkdir -p \"$REMOTE_DIR/releases\" && rm -rf \"$STAGING_DIR\" && mkdir -p \"$STAGING_DIR\""
 trap 'rm -f "$ARCHIVE"; ssh "$HOST" "rm -rf \"$STAGING_DIR\"" 2>/dev/null || true' EXIT HUP INT TERM
@@ -51,50 +51,44 @@ set -eu
 remote_dir=$1
 staging_dir=$2
 port=$3
+container_name=vox-live-translate
+image_name=vox-live-translate:latest
 release_dir="$remote_dir/releases/$(date +%Y%m%d%H%M%S)-$$"
 
-mv "$staging_dir" "$release_dir"
-ln -sfn "$release_dir" "$remote_dir/current"
-
-if [ -f "$remote_dir/server.pid" ]; then
-    old_pid=$(cat "$remote_dir/server.pid")
-    if kill -0 "$old_pid" 2>/dev/null; then
-        kill "$old_pid"
-        # Give the prior server a moment to stop cleanly before binding PORT.
-        for _ in 1 2 3 4 5; do
-            kill -0 "$old_pid" 2>/dev/null || break
-            sleep 1
-        done
-    fi
-fi
-
-if [ -f "$remote_dir/.env" ]; then
-    set -a
-    . "$remote_dir/.env"
-    set +a
-fi
-
-if command -v bun >/dev/null 2>&1; then
-    bun_bin=$(command -v bun)
-elif [ -x "$HOME/.bun/bin/bun" ]; then
-    bun_bin="$HOME/.bun/bin/bun"
-else
-    printf '%s\n' 'Bun is required on the remote server but was not found.' >&2
+if ! command -v docker >/dev/null 2>&1; then
+    printf '%s\n' 'Docker is required on the remote server but was not found.' >&2
     exit 1
 fi
 
-cd "$remote_dir"
-nohup env PORT="$port" "$bun_bin" "$remote_dir/current/.output/server/index.mjs" \
-    >> "$remote_dir/server.log" 2>&1 < /dev/null &
-new_pid=$!
-echo "$new_pid" > "$remote_dir/server.pid"
+if [ ! -f "$remote_dir/.env" ]; then
+    printf '%s\n' "Missing required environment file: $remote_dir/.env" >&2
+    exit 1
+fi
+
+mv "$staging_dir" "$release_dir"
+
+# Build before replacing the running container so a failed image build does
+# not interrupt the currently deployed version.
+docker build --tag "$image_name" "$release_dir"
+docker rm --force "$container_name" >/dev/null 2>&1 || true
+
+docker run --detach \
+    --name "$container_name" \
+    --restart unless-stopped \
+    --env-file "$remote_dir/.env" \
+    --env "NITRO_HOST=0.0.0.0" \
+    --env "PORT=$port" \
+    --publish "127.0.0.1:$port:$port" \
+    "$image_name" >/dev/null
 
 sleep 1
-if ! kill -0 "$new_pid" 2>/dev/null; then
-    printf '%s\n' 'The deployed server exited during startup. Recent log output:' >&2
-    tail -n 50 "$remote_dir/server.log" >&2 || true
+if [ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != true ]; then
+    printf '%s\n' 'The deployed container exited during startup. Recent log output:' >&2
+    docker logs --tail 50 "$container_name" >&2 || true
     exit 1
 fi
+
+ln -sfn "$release_dir" "$remote_dir/current"
 REMOTE_SCRIPT
 
 rm -f "$ARCHIVE"
