@@ -31,7 +31,7 @@ STAGING_DIR="$REMOTE_DIR/.incoming-$$"
 ARCHIVE=$(mktemp "${TMPDIR:-/tmp}/vox-live-translate.XXXXXX.tar.gz")
 
 # A single compressed transfer avoids per-file SCP overhead for build assets.
-tar -czf "$ARCHIVE" .output Dockerfile
+tar -czf "$ARCHIVE" .output Dockerfile compose.yaml
 
 ssh "$HOST" "mkdir -p \"$REMOTE_DIR/releases\" && rm -rf \"$STAGING_DIR\" && mkdir -p \"$STAGING_DIR\""
 trap 'rm -f "$ARCHIVE"; ssh "$HOST" "rm -rf \"$STAGING_DIR\"" 2>/dev/null || true' EXIT HUP INT TERM
@@ -52,11 +52,12 @@ remote_dir=$1
 staging_dir=$2
 port=$3
 container_name=vox-live-translate
-image_name=vox-live-translate:latest
+project_name=vox-live-translate
 release_dir="$remote_dir/releases/$(date +%Y%m%d%H%M%S)-$$"
+database_env="$remote_dir/database.env"
 
-if ! command -v docker >/dev/null 2>&1; then
-    printf '%s\n' 'Docker is required on the remote server but was not found.' >&2
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+    printf '%s\n' 'Docker with the Compose plugin is required on the remote server.' >&2
     exit 1
 fi
 
@@ -65,21 +66,29 @@ if [ ! -f "$remote_dir/.env" ]; then
     exit 1
 fi
 
+if [ ! -f "$database_env" ]; then
+    if ! command -v openssl >/dev/null 2>&1; then
+        printf '%s\n' 'OpenSSL is required to create the PostgreSQL credential file.' >&2
+        exit 1
+    fi
+    umask 077
+    printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" > "$database_env"
+fi
+chmod 600 "$database_env"
+
 mv "$staging_dir" "$release_dir"
+ln -s "$remote_dir/.env" "$release_dir/.env"
 
-# Build before replacing the running container so a failed image build does
+compose() {
+    APP_PORT="$port" docker compose --project-name "$project_name" --env-file "$database_env" --file "$release_dir/compose.yaml" "$@"
+}
+
+# Build and pull before replacing the running app so a failed deployment does
 # not interrupt the currently deployed version.
-docker build --tag "$image_name" "$release_dir"
+compose pull db
+compose build app
 docker rm --force "$container_name" >/dev/null 2>&1 || true
-
-docker run --detach \
-    --name "$container_name" \
-    --restart unless-stopped \
-    --env-file "$remote_dir/.env" \
-    --env "NITRO_HOST=0.0.0.0" \
-    --env "PORT=$port" \
-    --publish "127.0.0.1:$port:$port" \
-    "$image_name" >/dev/null
+compose up --detach
 
 sleep 1
 if [ "$(docker inspect --format '{{.State.Running}}' "$container_name")" != true ]; then
