@@ -121,7 +121,7 @@ export default function SpeechToSpeechPage() {
             outputAudioContext = new AudioContext();
             await outputAudioContext.resume();
             microphoneStream = await requestMicrophoneStream();
-            const token = await getEphemeralToken();
+            const token = await getEphemeralToken(targetLanguageCode());
             setStatus("Opening live speech translation…");
             const ai = new GoogleGenAI({ apiKey: token });
             const connectedSession = await ai.live.connect({

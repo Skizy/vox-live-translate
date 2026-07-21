@@ -2,9 +2,13 @@ import { GoogleGenAI, type LiveServerMessage, type Modality, type Session } from
 
 const MODEL = "models/gemini-3.5-live-translate-preview";
 
-export async function getEphemeralToken() {
-    console.info("[Vox] Requesting Gemini ephemeral token");
-    const response = await fetch("/api/get-ephemeral-token", { method: "POST" });
+export async function getEphemeralToken(targetLanguageCode: string) {
+    console.info("[Vox] Requesting Gemini ephemeral token", { targetLanguageCode });
+    const response = await fetch("/api/get-ephemeral-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLanguageCode }),
+    });
     console.info("[Vox] Gemini token response", response.status, response.statusText);
 
     if (!response.ok) {

@@ -55,7 +55,7 @@ export default function SpeechToTextPage() {
 
         try {
             microphoneStream = await requestMicrophoneStream();
-            const token = await getEphemeralToken();
+            const token = await getEphemeralToken(targetLanguageCode());
             setStatus("Opening live text translation…");
             const ai = new GoogleGenAI({ apiKey: token });
             const connectedSession = await ai.live.connect({

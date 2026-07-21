@@ -9,6 +9,12 @@ export async function POST(event: APIEvent) {
         return Response.json({ error: "Authentication required" }, { status: 401 });
     }
 
+    const body = await event.request.json().catch(() => undefined);
+    const targetLanguageCode = typeof body?.targetLanguageCode === "string" ? body.targetLanguageCode.trim() : "";
+    if (!targetLanguageCode) {
+        return Response.json({ error: "targetLanguageCode is required" }, { status: 400 });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         return Response.json({ error: "GEMINI_API_KEY is not configured" }, { status: 500 });
@@ -21,7 +27,12 @@ export async function POST(event: APIEvent) {
                 uses: 1,
                 expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                 newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
-                liveConnectConstraints: { model: liveTranslateModel },
+                liveConnectConstraints: {
+                    model: liveTranslateModel,
+                    config: {
+                        translationConfig: { targetLanguageCode, echoTargetLanguage: false },
+                    },
+                },
                 httpOptions: { apiVersion: "v1alpha" },
                 lockAdditionalFields: [],
             },

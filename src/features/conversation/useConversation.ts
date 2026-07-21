@@ -104,7 +104,10 @@ export function useConversation() {
             setStatus("Requesting microphone access…");
             await requestMicrophoneAccess();
             setStatus("Requesting short-lived Gemini tokens…");
-            const [myToken, companionToken] = await Promise.all([getEphemeralToken(), getEphemeralToken()]);
+            const [myToken, companionToken] = await Promise.all([
+                getEphemeralToken(companionLanguageCode()),
+                getEphemeralToken(myLanguageCode()),
+            ]);
             setStatus("Opening two live translation sessions…");
             const isCurrent = () => generation === conversationGeneration;
             const onUnexpectedClose = (message: string) => {
