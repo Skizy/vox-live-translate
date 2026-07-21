@@ -1,40 +1,72 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { deleteCookie, getCookie, setCookie } from "@solidjs/start/http";
 import type { FetchEvent } from "@solidjs/start/server";
-import { mockDatabase, type User } from "./mockDatabase";
+import { and, eq, gt } from "drizzle-orm";
+import { db } from "./db";
+import { sessions, users } from "./db/schema";
 
 const sessionCookieName = "vox_session";
 const sessionLifetimeSeconds = 60 * 60 * 24 * 7;
 
-export function getSession(event: Pick<FetchEvent, "nativeEvent">) {
-    const sessionId = getCookie(event.nativeEvent, sessionCookieName);
-    const session = typeof sessionId === "string" ? mockDatabase.sessions.get(sessionId) : undefined;
+type User = {
+    id: string;
+    email: string;
+    name: string;
+    picture?: string;
+};
 
-    if (!session || session.expiresAt <= Date.now()) {
-        if (typeof sessionId === "string") {
-            mockDatabase.sessions.delete(sessionId);
-        }
+function hashSessionToken(token: string) {
+    return createHash("sha256").update(token).digest("base64url");
+}
+
+export async function getSession(event: Pick<FetchEvent, "nativeEvent">) {
+    const sessionId = getCookie(event.nativeEvent, sessionCookieName);
+    if (typeof sessionId !== "string") {
         return undefined;
     }
+
+    const [session] = await db
+        .select({ userId: sessions.userId, expiresAt: sessions.expiresAt })
+        .from(sessions)
+        .where(and(eq(sessions.tokenHash, hashSessionToken(sessionId)), gt(sessions.expiresAt, new Date())))
+        .limit(1);
 
     return session;
 }
 
-export function requireSession(event: Pick<FetchEvent, "nativeEvent">) {
-    return getSession(event) ?? null;
+export async function requireSession(event: Pick<FetchEvent, "nativeEvent">) {
+    return (await getSession(event)) ?? null;
 }
 
-export function getAuthenticatedUser(event: Pick<FetchEvent, "nativeEvent">) {
-    const session = getSession(event);
-    return session ? mockDatabase.users.get(session.userId) : undefined;
+export async function getAuthenticatedUser(event: Pick<FetchEvent, "nativeEvent">) {
+    const session = await getSession(event);
+    if (!session) {
+        return undefined;
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
+    return user;
 }
 
-export function createSession(event: Pick<FetchEvent, "nativeEvent">, user: User) {
-    mockDatabase.users.set(user.id, user);
+export async function createSession(event: Pick<FetchEvent, "nativeEvent">, user: User) {
+    await db
+        .insert(users)
+        .values(user)
+        .onConflictDoUpdate({
+            target: users.id,
+            set: {
+                email: user.email,
+                name: user.name,
+                picture: user.picture,
+                updatedAt: new Date(),
+            },
+        });
+
     const sessionId = randomBytes(32).toString("base64url");
-    mockDatabase.sessions.set(sessionId, {
+    await db.insert(sessions).values({
+        tokenHash: hashSessionToken(sessionId),
         userId: user.id,
-        expiresAt: Date.now() + sessionLifetimeSeconds * 1000,
+        expiresAt: new Date(Date.now() + sessionLifetimeSeconds * 1000),
     });
 
     setCookie(event.nativeEvent, sessionCookieName, sessionId, {
@@ -46,10 +78,10 @@ export function createSession(event: Pick<FetchEvent, "nativeEvent">, user: User
     });
 }
 
-export function destroySession(event: Pick<FetchEvent, "nativeEvent">) {
+export async function destroySession(event: Pick<FetchEvent, "nativeEvent">) {
     const sessionId = getCookie(event.nativeEvent, sessionCookieName);
     if (typeof sessionId === "string") {
-        mockDatabase.sessions.delete(sessionId);
+        await db.delete(sessions).where(eq(sessions.tokenHash, hashSessionToken(sessionId)));
     }
     deleteCookie(event.nativeEvent, sessionCookieName, { path: "/" });
 }

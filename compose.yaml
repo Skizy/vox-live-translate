@@ -11,8 +11,20 @@ services:
     ports:
       - "127.0.0.1:${APP_PORT:-5080}:${APP_PORT:-5080}"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://vox:${POSTGRES_PASSWORD}@db:5432/vox
+    depends_on:
       db:
         condition: service_healthy
+    command: ["bun", "run", "db:migrate"]
 
   db:
     image: postgres:17-alpine

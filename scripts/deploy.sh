@@ -31,7 +31,7 @@ STAGING_DIR="$REMOTE_DIR/.incoming-$$"
 ARCHIVE=$(mktemp "${TMPDIR:-/tmp}/vox-live-translate.XXXXXX.tar.gz")
 
 # A single compressed transfer avoids per-file SCP overhead for build assets.
-tar -czf "$ARCHIVE" .output Dockerfile compose.yaml
+tar -czf "$ARCHIVE" .output Dockerfile compose.yaml package.json bun.lock drizzle.config.ts drizzle src/server/db/schema.ts
 
 ssh "$HOST" "mkdir -p \"$REMOTE_DIR/releases\" && rm -rf \"$STAGING_DIR\" && mkdir -p \"$STAGING_DIR\""
 trap 'rm -f "$ARCHIVE"; ssh "$HOST" "rm -rf \"$STAGING_DIR\"" 2>/dev/null || true' EXIT HUP INT TERM
@@ -86,7 +86,7 @@ compose() {
 # Build and pull before replacing the running app so a failed deployment does
 # not interrupt the currently deployed version.
 compose pull db
-compose build app
+compose build app migrate
 docker rm --force "$container_name" >/dev/null 2>&1 || true
 compose up --detach
 

@@ -26,6 +26,14 @@ format:
 check:
     bun run check
 
+# Generate Drizzle migrations from the database schema
+db-generate:
+    bun run db:generate
+
+# Apply Drizzle migrations using DATABASE_URL
+db-migrate:
+    bun run db:migrate
+
 # Build, upload, and restart the production app on cont
 # Set DEPLOY_HOST, DEPLOY_DIR, or PORT to override the defaults.
 deploy:

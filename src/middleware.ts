@@ -22,9 +22,9 @@ function isPublicPath(pathname: string) {
 }
 
 export default createMiddleware({
-    onRequest(event) {
+    async onRequest(event) {
         const url = new URL(event.request.url);
-        if (isPublicPath(url.pathname) || getSession(event)) {
+        if (isPublicPath(url.pathname) || (await getSession(event))) {
             return;
         }
 

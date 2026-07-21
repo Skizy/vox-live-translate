@@ -22,7 +22,7 @@ export async function POST(event: APIEvent) {
             return new Response("Google credential could not be verified", { status: 401 });
         }
 
-        createSession(event, user);
+        await createSession(event, user);
         return new Response(null, { status: 303, headers: { Location: "/" } });
     } catch (error) {
         console.error("Google authentication failed", error);
