@@ -28,11 +28,16 @@ esac
 REMOTE_PATH
 )"
 STAGING_DIR="$REMOTE_DIR/.incoming-$$"
+ARCHIVE=$(mktemp "${TMPDIR:-/tmp}/vox-live-translate.XXXXXX.tar.gz")
+
+# A single compressed transfer avoids per-file SCP overhead for build assets.
+tar -czf "$ARCHIVE" .output
 
 ssh "$HOST" "mkdir -p \"$REMOTE_DIR/releases\" && rm -rf \"$STAGING_DIR\" && mkdir -p \"$STAGING_DIR\""
-trap 'ssh "$HOST" "rm -rf \"$STAGING_DIR\"" 2>/dev/null || true' EXIT HUP INT TERM
+trap 'rm -f "$ARCHIVE"; ssh "$HOST" "rm -rf \"$STAGING_DIR\"" 2>/dev/null || true' EXIT HUP INT TERM
 
-scp -r .output "$HOST:$STAGING_DIR/"
+scp "$ARCHIVE" "$HOST:$STAGING_DIR/release.tar.gz"
+ssh "$HOST" "tar -xzf \"$STAGING_DIR/release.tar.gz\" -C \"$STAGING_DIR\" && rm \"$STAGING_DIR/release.tar.gz\""
 
 # Keep secrets outside versioned release directories. Upload .env when it is
 # available locally; otherwise an existing remote .env is retained.
@@ -92,5 +97,6 @@ if ! kill -0 "$new_pid" 2>/dev/null; then
 fi
 REMOTE_SCRIPT
 
+rm -f "$ARCHIVE"
 trap - EXIT HUP INT TERM
 printf 'Deployed to %s:%s (port %s)\n' "$HOST" "$REMOTE_DIR" "$PORT"
