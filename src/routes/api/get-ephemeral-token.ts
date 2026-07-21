@@ -1,11 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 import type { APIEvent } from "@solidjs/start/server";
 import { requireSession } from "~/server/auth";
+import { mockDatabase } from "~/server/mockDatabase";
 
 const liveTranslateModel = "models/gemini-3.5-live-translate-preview";
+const tokenLifetimeMilliseconds = 2 * 60 * 1000;
 
 export async function POST(event: APIEvent) {
-    if (!requireSession(event)) {
+    const session = requireSession(event);
+    if (!session) {
         return Response.json({ error: "Authentication required" }, { status: 401 });
     }
 
@@ -21,11 +24,13 @@ export async function POST(event: APIEvent) {
     }
 
     try {
+        const issuedAt = Date.now();
+        const expiresAt = issuedAt + tokenLifetimeMilliseconds;
         const client = new GoogleGenAI({ apiKey });
         const token = await client.authTokens.create({
             config: {
                 uses: 1,
-                expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+                expireTime: new Date(expiresAt).toISOString(),
                 newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
                 liveConnectConstraints: {
                     model: liveTranslateModel,
@@ -36,6 +41,16 @@ export async function POST(event: APIEvent) {
                 httpOptions: { apiVersion: "v1alpha" },
                 lockAdditionalFields: [],
             },
+        });
+        if (!token.name) {
+            throw new Error("Gemini did not return an ephemeral token");
+        }
+        mockDatabase.issuedEphemeralTokens.push({
+            token: token.name,
+            userId: session.userId,
+            targetLanguageCode,
+            issuedAt,
+            expiresAt,
         });
         return Response.json({ token: token.name }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {

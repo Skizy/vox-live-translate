@@ -1,27 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { deleteCookie, getCookie, setCookie } from "@solidjs/start/http";
 import type { FetchEvent } from "@solidjs/start/server";
+import { mockDatabase, type User } from "./mockDatabase";
 
 const sessionCookieName = "vox_session";
 const sessionLifetimeSeconds = 60 * 60 * 24 * 7;
-
-type User = {
-    id: string;
-    email: string;
-    name: string;
-    picture?: string;
-};
-
-type Session = {
-    userId: string;
-    expiresAt: number;
-};
-
-// This in-memory store deliberately acts as the application's mock database.
-const mockDatabase = {
-    users: new Map<string, User>(),
-    sessions: new Map<string, Session>(),
-};
 
 export function getSession(event: Pick<FetchEvent, "nativeEvent">) {
     const sessionId = getCookie(event.nativeEvent, sessionCookieName);
