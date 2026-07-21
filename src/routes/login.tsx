@@ -48,7 +48,7 @@ export default function LoginPage() {
                     });
                     window.google.accounts.id.renderButton(googleButton, {
                         type: "standard",
-                        theme: "outline",
+                        theme: "filled_blue",
                         size: "large",
                         text: "signin_with",
                         shape: "pill",
