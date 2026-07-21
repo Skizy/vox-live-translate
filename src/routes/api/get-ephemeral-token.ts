@@ -2,6 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 import type { APIEvent } from "@solidjs/start/server";
 import { requireSession } from "~/server/auth";
 
+const liveTranslateModel = "models/gemini-3.5-live-translate-preview";
+
 export async function POST(event: APIEvent) {
     if (!requireSession(event)) {
         return Response.json({ error: "Authentication required" }, { status: 401 });
@@ -19,7 +21,9 @@ export async function POST(event: APIEvent) {
                 uses: 1,
                 expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
                 newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
+                liveConnectConstraints: { model: liveTranslateModel },
                 httpOptions: { apiVersion: "v1alpha" },
+                lockAdditionalFields: [],
             },
         });
         return Response.json({ token: token.name }, { headers: { "Cache-Control": "no-store" } });
