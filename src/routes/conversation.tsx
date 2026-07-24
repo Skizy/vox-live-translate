@@ -1,6 +1,7 @@
 import Navigation from "~/components/Navigation";
 import { ConversationControls } from "~/features/conversation/ConversationControls";
 import { LanguageFields } from "~/features/conversation/LanguageFields";
+import { languageLabel } from "~/features/conversation/types";
 import { useConversation } from "~/features/conversation/useConversation";
 
 export default function ConversationPage() {
@@ -41,10 +42,17 @@ export default function ConversationPage() {
                           : "Start conversation"}
                 </button>
 
+                {conversation.isConversing() && conversation.detectedCompanionLanguage() && (
+                    <p class="detected-language" aria-live="polite">
+                        {languageLabel(conversation.detectedCompanionLanguage() ?? "")} (detected)
+                    </p>
+                )}
+
                 {conversation.isConversing() && (
                     <ConversationControls
                         phase={conversation.phase}
                         translation={conversation.companionTranslation}
+                        isCompanionLanguageReady={conversation.isCompanionLanguageReady}
                         beginSpeaking={conversation.beginSpeaking}
                         finishSpeaking={conversation.finishSpeaking}
                     />

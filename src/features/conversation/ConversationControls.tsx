@@ -4,6 +4,7 @@ import type { ConversationPhase } from "./types";
 type ConversationControlsProps = {
     phase: Accessor<ConversationPhase>;
     translation: Accessor<string>;
+    isCompanionLanguageReady: Accessor<boolean>;
     beginSpeaking: () => void;
     finishSpeaking: () => void;
 };
@@ -14,7 +15,7 @@ export function ConversationControls(props: ConversationControlsProps) {
             <button
                 class="speaking-button"
                 type="button"
-                disabled={props.phase() !== "listening"}
+                disabled={props.phase() !== "listening" || !props.isCompanionLanguageReady()}
                 onPointerDown={(event) => {
                     event.currentTarget.setPointerCapture(event.pointerId);
                     props.beginSpeaking();

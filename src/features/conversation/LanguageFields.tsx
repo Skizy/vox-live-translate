@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import { languageOptions } from "./types";
+import { autoLanguageCode, languageOptions } from "./types";
 
 type LanguageFieldsProps = {
     myLanguageCode: Accessor<string>;
@@ -33,6 +33,7 @@ export function LanguageFields(props: LanguageFieldsProps) {
                     disabled={props.disabled()}
                     onInput={(event) => props.setCompanionLanguageCode(event.currentTarget.value)}
                 >
+                    <option value={autoLanguageCode}>Auto</option>
                     {languageOptions.map(([code, label]) => (
                         <option value={code}>{label}</option>
                     ))}
