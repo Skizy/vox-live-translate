@@ -1,28 +1,48 @@
 import { GoogleGenAI, type LiveServerMessage, type Modality, type Session } from "@google/genai";
+import { err, ok, ResultAsync } from "neverthrow";
+import { match, P } from "ts-pattern";
 
 const MODEL = "models/gemini-3.5-live-translate-preview";
 
-export async function getEphemeralToken(targetLanguageCode: string) {
+function toError(error: unknown) {
+    return error instanceof Error ? error : new Error("An unknown error occurred.");
+}
+
+function extractToken(payload: unknown) {
+    return match(payload)
+        .with({ token: P.string }, ({ token }) =>
+            token ? ok(token) : err(new Error("Token response did not include a token.")),
+        )
+        .otherwise(() => err(new Error("Token response did not include a token.")));
+}
+
+export function getEphemeralToken(targetLanguageCode: string): ResultAsync<string, Error> {
     console.info("[Vox] Requesting Gemini ephemeral token", { targetLanguageCode });
-    const response = await fetch("/api/get-ephemeral-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetLanguageCode }),
-    });
-    console.info("[Vox] Gemini token response", response.status, response.statusText);
 
-    if (!response.ok) {
-        console.warn("[Vox] Token request failed", { status: response.status, statusText: response.statusText });
-        throw new Error("Could not create a Gemini Live token.");
-    }
+    return ResultAsync.fromPromise(
+        fetch("/api/get-ephemeral-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ targetLanguageCode }),
+        }),
+        toError,
+    )
+        .andThen((response) => {
+            console.info("[Vox] Gemini token response", response.status, response.statusText);
+            if (!response.ok) {
+                console.warn("[Vox] Token request failed", {
+                    status: response.status,
+                    statusText: response.statusText,
+                });
+                return err(new Error("Could not create a Gemini Live token."));
+            }
 
-    const { token } = (await response.json()) as { token?: string };
-    if (!token) {
-        console.warn("[Vox] Token response did not contain a token");
-        throw new Error("Token response did not include a token.");
-    }
-
-    return token;
+            return ResultAsync.fromPromise(response.json(), toError).andThen(extractToken);
+        })
+        .mapErr((error) => {
+            console.warn("[Vox] Could not request or parse a Gemini token", error);
+            return error;
+        });
 }
 
 type ConnectLiveTranslateOptions = {

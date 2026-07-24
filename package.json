@@ -18,9 +18,11 @@
     "@solidjs/router": "^0.16.2",
     "@solidjs/start": "^2.0.0-beta.0",
     "drizzle-orm": "^0.45.2",
+    "neverthrow": "^8.2.0",
     "nitro": "^3.0.260610-beta",
     "postgres": "^3.4.9",
     "solid-js": "^1.9.5",
+    "ts-pattern": "^5.9.0",
     "vite": "^8.0.0"
   },
   "engines": {

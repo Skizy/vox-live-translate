@@ -1,5 +1,7 @@
 import { type LiveServerMessage, Modality, type Session } from "@google/genai";
+import { Result } from "neverthrow";
 import { createSignal, onCleanup } from "solid-js";
+import { match } from "ts-pattern";
 import { createMicrophoneCaptureNodes } from "../audio/microphone";
 import { bytesToBase64, INPUT_SAMPLE_RATE } from "../audio/pcm";
 import { createConversationHistory } from "./conversationHistory";
@@ -80,16 +82,13 @@ export function useConversation() {
                     microphoneBytes: microphoneAudio.byteLength,
                 });
             }
-            sendRealtimeAudio(
-                myLanguageSession,
-                currentPhase === "speaking" ? microphoneAudio : silenceAudio,
-                "my to companion language",
-            );
-            sendRealtimeAudio(
-                companionLanguageSession,
-                currentPhase === "listening" ? microphoneAudio : silenceAudio,
-                "companion to my language",
-            );
+            const [myLanguageAudio, companionLanguageAudio] = match(currentPhase)
+                .with("listening", () => [silenceAudio, microphoneAudio] as const)
+                .with("speaking", () => [microphoneAudio, silenceAudio] as const)
+                .with("playing", "ending-play", () => [silenceAudio, silenceAudio] as const)
+                .exhaustive();
+            sendRealtimeAudio(myLanguageSession, myLanguageAudio, "my to companion language");
+            sendRealtimeAudio(companionLanguageSession, companionLanguageAudio, "companion to my language");
         });
         sourceNode = capture.source;
         processorNode = capture.processor;
@@ -104,10 +103,15 @@ export function useConversation() {
             setStatus("Requesting microphone access…");
             await requestMicrophoneAccess();
             setStatus("Requesting short-lived Gemini tokens…");
-            const [myToken, companionToken] = await Promise.all([
-                getEphemeralToken(companionLanguageCode()),
-                getEphemeralToken(myLanguageCode()),
-            ]);
+            const tokenResult = Result.combine(
+                await Promise.all([getEphemeralToken(companionLanguageCode()), getEphemeralToken(myLanguageCode())]),
+            );
+            const [myToken, companionToken] = tokenResult.match(
+                (tokens) => tokens,
+                (error) => {
+                    throw error;
+                },
+            );
             setStatus("Opening two live translation sessions…");
             const isCurrent = () => generation === conversationGeneration;
             const onUnexpectedClose = (message: string) => {
