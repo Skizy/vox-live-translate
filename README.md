@@ -2,6 +2,33 @@
 
 A SolidStart v2 refactor of Vox, a Solid PWA for live speech translation with Gemini Live Translate.
 
+## Features
+
+- **Live speech-to-text translation** — speak into the microphone and read the continuously updated translation.
+- **Live speech-to-speech translation** — speak naturally and hear the translated audio as it arrives.
+- **Two-way conversation mode** — choose your language and your companion's language; read your companion's translated speech and hold **I am speaking** to send your speech for translated audio playback.
+- **Supported target languages** — English, Russian, German, Ukrainian, and Serbian.
+- **Conversation history** — browse previous conversation transcripts, including their language pair, timestamp, speakers, original text, and translations.
+- **Google sign-in and secure sessions** — all app routes require an authenticated Google account; sessions are stored server-side and delivered in HTTP-only cookies.
+- **PWA assets** — includes a web app manifest, service worker, icons, and Android asset links.
+
+### How translation modes work
+
+| Mode             | Input                                                    | Result                                                   |
+| ---------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| Speech to text   | Microphone                                               | Live translated text                                     |
+| Speech to speech | Microphone                                               | Streamed translated audio                                |
+| Conversation     | Companion's microphone audio or your push-to-talk speech | Companion translation as text; your translation as audio |
+
+Conversation history is stored only in the browser's `localStorage`. It is not synced to the signed-in account, so clearing browser storage removes the locally saved entries.
+
+## Requirements
+
+- A Google OAuth web client ID for sign-in.
+- A Gemini API key capable of creating Live Translate sessions.
+- PostgreSQL for users, sessions, and issued translation tokens.
+- A modern browser with microphone access, `AudioContext`, and `AudioWorklet` support. Microphone access normally requires HTTPS (or `localhost` during development).
+
 ## Architecture
 
 - `src/routes/` uses SolidStart's idiomatic file-based router for UI and API routes.
