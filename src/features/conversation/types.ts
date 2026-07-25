@@ -1,4 +1,10 @@
 export type ConversationPhase = "listening" | "speaking" | "playing" | "ending-play";
+export type ConversationMode = "companion-text" | "companion-audio";
+
+export const conversationModeOptions: readonly [ConversationMode, string][] = [
+    ["companion-text", "Read companion, hear my translation"],
+    ["companion-audio", "Hear companion, read my translation"],
+];
 
 export const languageOptions = [
     ["en", "English"],

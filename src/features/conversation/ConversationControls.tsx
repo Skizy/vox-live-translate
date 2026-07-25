@@ -1,9 +1,10 @@
 import type { Accessor } from "solid-js";
-import type { ConversationPhase } from "./types";
+import type { ConversationMode, ConversationPhase } from "./types";
 
 type ConversationControlsProps = {
     phase: Accessor<ConversationPhase>;
     translation: Accessor<string>;
+    conversationMode: Accessor<ConversationMode>;
     isCompanionLanguageReady: Accessor<boolean>;
     beginSpeaking: () => void;
     finishSpeaking: () => void;
@@ -31,9 +32,16 @@ export function ConversationControls(props: ConversationControlsProps) {
             >
                 {props.phase() === "speaking" ? "Release to translate" : "I am speaking"}
             </button>
-            <p class="speaking-hint">Hold while you speak. Your translated audio plays after you release.</p>
+            <p class="speaking-hint">
+                {props.conversationMode() === "companion-audio"
+                    ? "Hold while you speak. Your translated text appears after you release."
+                    : "Hold while you speak. Your translated audio plays after you release."}
+            </p>
             <p class="translation" aria-live="polite">
-                {props.translation() || "Your companion’s translation will appear here."}
+                {props.translation() ||
+                    (props.conversationMode() === "companion-audio"
+                        ? "Your translation will appear here."
+                        : "Your companion’s translation will appear here.")}
             </p>
         </section>
     );

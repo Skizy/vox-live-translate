@@ -5,13 +5,14 @@ import { createMicrophoneCaptureNodes } from "../audio/microphone";
 import { bytesToBase64, INPUT_SAMPLE_RATE } from "../audio/pcm";
 import { createConversationHistory } from "./conversationHistory";
 import { connectLiveTranslate, getEphemeralToken } from "./liveTranslate";
-import { autoLanguageCode, type ConversationPhase, languageLabel } from "./types";
+import { autoLanguageCode, type ConversationMode, type ConversationPhase, languageLabel } from "./types";
 import { usePcmPlayback } from "./usePcmPlayback";
 
 export function useConversation() {
     const [status, setStatus] = createSignal("Ready to start a conversation.");
     const [myLanguageCode, setMyLanguageCode] = createSignal("ru");
     const [companionLanguageCode, setCompanionLanguageCode] = createSignal("en");
+    const [conversationMode, setConversationMode] = createSignal<ConversationMode>("companion-text");
     const [isConversing, setIsConversing] = createSignal(false);
     const [isConnecting, setIsConnecting] = createSignal(false);
     const [phase, setPhase] = createSignal<ConversationPhase>("listening");
@@ -45,6 +46,12 @@ export function useConversation() {
 
     function handleMyLanguageMessage(message: LiveServerMessage) {
         recordTranscriptions(message, "me");
+        const text = message.serverContent?.outputTranscription?.text;
+        if (conversationMode() === "companion-audio") {
+            if (text) setCompanionTranslation((translation) => translation + text);
+            return;
+        }
+
         for (const part of message.serverContent?.modelTurn?.parts ?? []) {
             const inlineData = part.inlineData;
             if (inlineData?.mimeType?.startsWith("audio/pcm") && inlineData.data) playback.receive(inlineData.data);
@@ -53,8 +60,17 @@ export function useConversation() {
 
     function handleCompanionLanguageMessage(message: LiveServerMessage) {
         recordTranscriptions(message, "companion");
-        const text = message.serverContent?.outputTranscription?.text;
-        if (text) setCompanionTranslation((translation) => translation + text);
+        if (conversationMode() === "companion-text") {
+            const text = message.serverContent?.outputTranscription?.text;
+            if (text) setCompanionTranslation((translation) => translation + text);
+            return;
+        }
+
+        for (const part of message.serverContent?.modelTurn?.parts ?? []) {
+            const inlineData = part.inlineData;
+            if (inlineData?.mimeType?.startsWith("audio/pcm") && inlineData.data)
+                playback.receiveIncoming(inlineData.data);
+        }
     }
 
     async function requestMicrophoneAccess() {
@@ -97,9 +113,11 @@ export function useConversation() {
     async function startConversation() {
         const myLanguage = myLanguageCode();
         const selectedCompanionLanguage = companionLanguageCode();
+        const selectedConversationMode = conversationMode();
         const detectCompanionLanguage = selectedCompanionLanguage === autoLanguageCode;
         let generation = ++conversationGeneration;
         history = createConversationHistory(myLanguage, selectedCompanionLanguage);
+        setCompanionTranslation("");
         setDetectedCompanionLanguage(undefined);
         setIsCompanionLanguageReady(!detectCompanionLanguage);
         setIsConnecting(true);
@@ -128,7 +146,9 @@ export function useConversation() {
                     const session = await connectLiveTranslate({
                         token,
                         targetLanguageCode: languageCode,
-                        responseModalities: [Modality.AUDIO],
+                        responseModalities: [
+                            selectedConversationMode === "companion-audio" ? Modality.TEXT : Modality.AUDIO,
+                        ],
                         onMessage: handleMyLanguageMessage,
                         isCurrent: current,
                         onUnexpectedClose: unexpectedClose,
@@ -154,7 +174,9 @@ export function useConversation() {
                 companionLanguageSession = await connectLiveTranslate({
                     token,
                     targetLanguageCode: myLanguage,
-                    responseModalities: [Modality.TEXT],
+                    responseModalities: [
+                        selectedConversationMode === "companion-audio" ? Modality.AUDIO : Modality.TEXT,
+                    ],
                     onMessage: (message) => {
                         handleCompanionLanguageMessage(message);
                         const languageCode = message.serverContent?.inputTranscription?.languageCode;
@@ -180,7 +202,9 @@ export function useConversation() {
                 connectLiveTranslate({
                     token: myToken,
                     targetLanguageCode: selectedCompanionLanguage,
-                    responseModalities: [Modality.AUDIO],
+                    responseModalities: [
+                        selectedConversationMode === "companion-audio" ? Modality.TEXT : Modality.AUDIO,
+                    ],
                     onMessage: handleMyLanguageMessage,
                     isCurrent: current,
                     onUnexpectedClose: unexpectedClose,
@@ -188,7 +212,9 @@ export function useConversation() {
                 connectLiveTranslate({
                     token: companionToken,
                     targetLanguageCode: myLanguage,
-                    responseModalities: [Modality.TEXT],
+                    responseModalities: [
+                        selectedConversationMode === "companion-audio" ? Modality.AUDIO : Modality.TEXT,
+                    ],
                     onMessage: handleCompanionLanguageMessage,
                     isCurrent: current,
                     onUnexpectedClose: unexpectedClose,
@@ -269,6 +295,12 @@ export function useConversation() {
 
     function finishSpeaking() {
         if (phase() !== "speaking") return;
+        if (conversationMode() === "companion-audio") {
+            setPhase("listening");
+            setStatus("Listening to your companion.");
+            return;
+        }
+
         setPhase("playing");
         setStatus("Playing your translation…");
         playback.finishSpeaking();
@@ -323,6 +355,8 @@ export function useConversation() {
         setMyLanguageCode,
         companionLanguageCode,
         setCompanionLanguageCode,
+        conversationMode,
+        setConversationMode,
         isConversing,
         isConnecting,
         phase,

@@ -38,3 +38,7 @@ db-migrate:
 # Set DEPLOY_HOST, DEPLOY_DIR, or PORT to override the defaults.
 deploy:
     ./scripts/deploy.sh
+
+# Upload the existing build output and restart the production app on cont.
+deploy-no-build:
+    ./scripts/deploy.sh --no-build

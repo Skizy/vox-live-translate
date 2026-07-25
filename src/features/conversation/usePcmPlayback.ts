@@ -144,6 +144,10 @@ export function usePcmPlayback({ phase, setPhase, setStatus }: PlaybackOptions) 
         advanceQueue();
     }
 
+    function receiveIncoming(base64Audio: string) {
+        play(base64Audio);
+    }
+
     function beginSpeaking() {
         queuedAudio = [];
         consecutiveSilentDurationMs = 0;
@@ -176,5 +180,5 @@ export function usePcmPlayback({ phase, setPhase, setStatus }: PlaybackOptions) 
         nextPlaybackTime = outputAudioContext?.currentTime ?? 0;
     }
 
-    return { beginSpeaking, finishSpeaking, receive, resumeOutput, stop };
+    return { beginSpeaking, finishSpeaking, receive, receiveIncoming, resumeOutput, stop };
 }

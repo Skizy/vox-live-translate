@@ -1,7 +1,7 @@
 import Navigation from "~/components/Navigation";
 import { ConversationControls } from "~/features/conversation/ConversationControls";
 import { LanguageFields } from "~/features/conversation/LanguageFields";
-import { languageLabel } from "~/features/conversation/types";
+import { type ConversationMode, conversationModeOptions, languageLabel } from "~/features/conversation/types";
 import { useConversation } from "~/features/conversation/useConversation";
 
 export default function ConversationPage() {
@@ -24,6 +24,21 @@ export default function ConversationPage() {
                     setCompanionLanguageCode={conversation.setCompanionLanguageCode}
                     disabled={() => conversation.isConversing() || conversation.isConnecting()}
                 />
+                <label class="field conversation-mode" for="conversation-mode-select">
+                    <span>Conversation Mode</span>
+                    <select
+                        id="conversation-mode-select"
+                        value={conversation.conversationMode()}
+                        disabled={conversation.isConversing() || conversation.isConnecting()}
+                        onInput={(event) =>
+                            conversation.setConversationMode(event.currentTarget.value as ConversationMode)
+                        }
+                    >
+                        {conversationModeOptions.map(([value, label]) => (
+                            <option value={value}>{label}</option>
+                        ))}
+                    </select>
+                </label>
 
                 <button
                     class="primary-button"
@@ -52,6 +67,7 @@ export default function ConversationPage() {
                     <ConversationControls
                         phase={conversation.phase}
                         translation={conversation.companionTranslation}
+                        conversationMode={conversation.conversationMode}
                         isCompanionLanguageReady={conversation.isCompanionLanguageReady}
                         beginSpeaking={conversation.beginSpeaking}
                         finishSpeaking={conversation.finishSpeaking}

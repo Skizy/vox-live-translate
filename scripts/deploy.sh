@@ -5,6 +5,26 @@ set -eu
 HOST="${DEPLOY_HOST:-cont}"
 REMOTE_DIR="${DEPLOY_DIR:-~/deploy/vox-live-translate}"
 PORT="${PORT:-5080}"
+NO_BUILD=false
+
+case "${1:-}" in
+    --no-build)
+        NO_BUILD=true
+        shift
+        ;;
+    '')
+        ;;
+    *)
+        printf '%s\n' "Usage: $0 [--no-build]" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$#" -ne 0 ]; then
+    printf '%s\n' "Usage: $0 [--no-build]" >&2
+    exit 2
+fi
+
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
@@ -16,7 +36,9 @@ case "$PORT" in
 esac
 
 cd "$PROJECT_DIR"
-bun run build
+if [ "$NO_BUILD" = false ]; then
+    bun run build
+fi
 
 # Expand the remote home directory on the server rather than locally.
 REMOTE_DIR="$(ssh "$HOST" sh -s -- "$REMOTE_DIR" <<'REMOTE_PATH'
