@@ -22,9 +22,27 @@ export default function SpeechToTextPage() {
     let session: Session | undefined;
     let stopMicrophoneCapture: (() => void) | undefined;
     let microphoneStream: MediaStream | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let generation = 0;
+    let sessionGeneration = 0;
+
+    function clearRefreshTimer() {
+        if (refreshTimer !== undefined) {
+            clearTimeout(refreshTimer);
+            refreshTimer = undefined;
+        }
+    }
+
+    function resetRefreshTimer(attempt: number) {
+        clearRefreshTimer();
+        refreshTimer = setTimeout(() => {
+            refreshTimer = undefined;
+            void refreshSession(attempt);
+        }, 110_000);
+    }
 
     function releaseResources() {
+        clearRefreshTimer();
         stopMicrophoneCapture?.();
         stopMicrophoneCapture = undefined;
         microphoneStream?.getTracks().forEach((track) => {
@@ -47,52 +65,86 @@ export default function SpeechToTextPage() {
         }
     }
 
+    async function openLiveSession(attempt: number, connection: number) {
+        const token = await getEphemeralToken(targetLanguageCode());
+        const ai = new GoogleGenAI({ apiKey: token });
+
+        return ai.live.connect({
+            model: MODEL,
+            config: {
+                responseModalities: [Modality.TEXT],
+                translationConfig: {
+                    targetLanguageCode: targetLanguageCode(),
+                    echoTargetLanguage: false,
+                },
+            },
+            callbacks: {
+                onmessage: (message) => {
+                    if (attempt !== generation || connection !== sessionGeneration) {
+                        return;
+                    }
+
+                    const text = message.serverContent?.outputTranscription?.text;
+                    if (text) {
+                        setTranslation((current) => current + text);
+                    }
+                },
+                onclose: (event) => {
+                    if (attempt !== generation || connection !== sessionGeneration) {
+                        return;
+                    }
+
+                    const reason = event.reason ? `: ${event.reason}` : "";
+                    stopTranslation(`Translation connection closed (${event.code}${reason}).`);
+                },
+                onerror: (event) => {
+                    console.error("[Vox] Speech-to-text session error", event);
+                },
+            },
+        });
+    }
+
+    async function refreshSession(attempt: number) {
+        if (attempt !== generation || !isTranslating()) {
+            return;
+        }
+
+        const connection = ++sessionGeneration;
+
+        try {
+            const refreshedSession = await openLiveSession(attempt, connection);
+            if (attempt !== generation || connection !== sessionGeneration) {
+                refreshedSession.close();
+                return;
+            }
+
+            const previousSession = session;
+            session = refreshedSession;
+            previousSession?.close();
+            resetRefreshTimer(attempt);
+        } catch (error) {
+            console.error("[Vox] Could not refresh speech-to-text translation", error);
+            if (attempt === generation && connection === sessionGeneration) {
+                stopTranslation(
+                    error instanceof Error ? error.message : "Could not refresh speech-to-text translation.",
+                );
+            }
+        }
+    }
+
     async function startTranslation() {
         const attempt = ++generation;
+        const connection = ++sessionGeneration;
         setIsConnecting(true);
         setStatus("Requesting microphone access…");
         setTranslation("");
 
         try {
             microphoneStream = await requestMicrophoneStream();
-            const token = await getEphemeralToken(targetLanguageCode());
             setStatus("Opening live text translation…");
-            const ai = new GoogleGenAI({ apiKey: token });
-            const connectedSession = await ai.live.connect({
-                model: MODEL,
-                config: {
-                    responseModalities: [Modality.TEXT],
-                    translationConfig: {
-                        targetLanguageCode: targetLanguageCode(),
-                        echoTargetLanguage: false,
-                    },
-                },
-                callbacks: {
-                    onmessage: (message) => {
-                        if (attempt !== generation) {
-                            return;
-                        }
+            const connectedSession = await openLiveSession(attempt, connection);
 
-                        const text = message.serverContent?.outputTranscription?.text;
-                        if (text) {
-                            setTranslation((current) => current + text);
-                        }
-                    },
-                    onclose: (event) => {
-                        if (attempt !== generation) {
-                            return;
-                        }
-
-                        const reason = event.reason ? `: ${event.reason}` : "";
-                        stopTranslation(`Translation connection closed (${event.code}${reason}).`);
-                    },
-                    onerror: (event) => {
-                        console.error("[Vox] Speech-to-text session error", event);
-                    },
-                },
-            });
-
-            if (attempt !== generation) {
+            if (attempt !== generation || connection !== sessionGeneration) {
                 connectedSession.close();
                 return;
             }
@@ -102,7 +154,7 @@ export default function SpeechToTextPage() {
                 sendMicrophoneAudio(session, audio);
             });
 
-            if (attempt !== generation) {
+            if (attempt !== generation || connection !== sessionGeneration) {
                 stopMicrophoneCapture();
                 connectedSession.close();
                 return;
@@ -111,9 +163,10 @@ export default function SpeechToTextPage() {
             setIsConnecting(false);
             setIsTranslating(true);
             setStatus("Listening and translating to text…");
+            resetRefreshTimer(attempt);
         } catch (error) {
             console.error("[Vox] Could not start speech-to-text translation", error);
-            if (attempt === generation) {
+            if (attempt === generation && connection === sessionGeneration) {
                 stopTranslation(error instanceof Error ? error.message : "Could not start speech-to-text translation.");
             }
         }

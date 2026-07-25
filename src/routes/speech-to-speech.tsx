@@ -25,7 +25,9 @@ export default function SpeechToSpeechPage() {
     let outputAudioContext: AudioContext | undefined;
     let nextPlaybackTime = 0;
     let generation = 0;
+    let sessionGeneration = 0;
     let playbackGeneration = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     const activePlaybackSources = new Set<AudioBufferSourceNode>();
 
     function stopPlayback() {
@@ -88,7 +90,15 @@ export default function SpeechToSpeechPage() {
         }
     }
 
+    function clearReconnectTimer() {
+        if (reconnectTimer !== undefined) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = undefined;
+        }
+    }
+
     function releaseResources() {
+        clearReconnectTimer();
         stopMicrophoneCapture?.();
         stopMicrophoneCapture = undefined;
         microphoneStream?.getTracks().forEach((track) => {
@@ -112,6 +122,83 @@ export default function SpeechToSpeechPage() {
         }
     }
 
+    async function connectLiveSession(token: string, attempt: number, sessionAttempt: number) {
+        const ai = new GoogleGenAI({ apiKey: token });
+        return ai.live.connect({
+            model: MODEL,
+            config: {
+                responseModalities: [Modality.AUDIO],
+                translationConfig: {
+                    targetLanguageCode: targetLanguageCode(),
+                    echoTargetLanguage: false,
+                },
+            },
+            callbacks: {
+                onmessage: (message) => {
+                    if (attempt !== generation || sessionAttempt !== sessionGeneration) {
+                        return;
+                    }
+
+                    for (const part of message.serverContent?.modelTurn?.parts ?? []) {
+                        const inlineData = part.inlineData;
+                        if (inlineData?.mimeType?.startsWith("audio/pcm") && inlineData.data) {
+                            playPcm24k(inlineData.data);
+                        }
+                    }
+                },
+                onclose: (event) => {
+                    if (attempt !== generation || sessionAttempt !== sessionGeneration) {
+                        return;
+                    }
+
+                    const reason = event.reason ? `: ${event.reason}` : "";
+                    stopTranslation(`Translation connection closed (${event.code}${reason}).`);
+                },
+                onerror: (event) => {
+                    console.error("[Vox] Speech-to-speech session error", event);
+                },
+            },
+        });
+    }
+
+    function scheduleSessionRefresh(attempt: number) {
+        clearReconnectTimer();
+        reconnectTimer = setTimeout(() => {
+            reconnectTimer = undefined;
+            void refreshSession(attempt);
+        }, 110_000);
+    }
+
+    async function refreshSession(attempt: number) {
+        if (attempt !== generation || !session) {
+            return;
+        }
+
+        const sessionAttempt = ++sessionGeneration;
+
+        try {
+            const token = await getEphemeralToken(targetLanguageCode());
+            const connectedSession = await connectLiveSession(token, attempt, sessionAttempt);
+
+            if (attempt !== generation || sessionAttempt !== sessionGeneration) {
+                connectedSession.close();
+                return;
+            }
+
+            const previousSession = session;
+            session = connectedSession;
+            previousSession.close();
+            scheduleSessionRefresh(attempt);
+        } catch (error) {
+            console.error("[Vox] Could not refresh speech-to-speech translation", error);
+            if (attempt === generation && sessionAttempt === sessionGeneration) {
+                stopTranslation(
+                    error instanceof Error ? error.message : "Could not refresh speech-to-speech translation.",
+                );
+            }
+        }
+    }
+
     async function startTranslation() {
         const attempt = ++generation;
         setIsConnecting(true);
@@ -122,45 +209,11 @@ export default function SpeechToSpeechPage() {
             await outputAudioContext.resume();
             microphoneStream = await requestMicrophoneStream();
             const token = await getEphemeralToken(targetLanguageCode());
+            const sessionAttempt = ++sessionGeneration;
             setStatus("Opening live speech translation…");
-            const ai = new GoogleGenAI({ apiKey: token });
-            const connectedSession = await ai.live.connect({
-                model: MODEL,
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    translationConfig: {
-                        targetLanguageCode: targetLanguageCode(),
-                        echoTargetLanguage: false,
-                    },
-                },
-                callbacks: {
-                    onmessage: (message) => {
-                        if (attempt !== generation) {
-                            return;
-                        }
+            const connectedSession = await connectLiveSession(token, attempt, sessionAttempt);
 
-                        for (const part of message.serverContent?.modelTurn?.parts ?? []) {
-                            const inlineData = part.inlineData;
-                            if (inlineData?.mimeType?.startsWith("audio/pcm") && inlineData.data) {
-                                playPcm24k(inlineData.data);
-                            }
-                        }
-                    },
-                    onclose: (event) => {
-                        if (attempt !== generation) {
-                            return;
-                        }
-
-                        const reason = event.reason ? `: ${event.reason}` : "";
-                        stopTranslation(`Translation connection closed (${event.code}${reason}).`);
-                    },
-                    onerror: (event) => {
-                        console.error("[Vox] Speech-to-speech session error", event);
-                    },
-                },
-            });
-
-            if (attempt !== generation) {
+            if (attempt !== generation || sessionAttempt !== sessionGeneration) {
                 connectedSession.close();
                 return;
             }
@@ -170,7 +223,7 @@ export default function SpeechToSpeechPage() {
                 sendMicrophoneAudio(session, audio);
             });
 
-            if (attempt !== generation) {
+            if (attempt !== generation || sessionAttempt !== sessionGeneration) {
                 stopMicrophoneCapture();
                 connectedSession.close();
                 return;
@@ -179,6 +232,7 @@ export default function SpeechToSpeechPage() {
             setIsConnecting(false);
             setIsTranslating(true);
             setStatus("Listening and speaking the translation…");
+            scheduleSessionRefresh(attempt);
         } catch (error) {
             console.error("[Vox] Could not start speech-to-speech translation", error);
             if (attempt === generation) {
