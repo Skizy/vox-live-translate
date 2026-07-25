@@ -30,6 +30,7 @@ export function useConversation() {
     let conversationGeneration = 0;
     let history: ReturnType<typeof createConversationHistory> | undefined;
     let lastAudioRoutingLogTime = 0;
+    let reconnectionTimer: number | undefined;
 
     function sendRealtimeAudio(session: Session | undefined, data: Uint8Array) {
         if (!session) return;
@@ -94,30 +95,33 @@ export function useConversation() {
     }
 
     async function startConversation() {
-        const generation = ++conversationGeneration;
-        const detectCompanionLanguage = companionLanguageCode() === autoLanguageCode;
-        history = createConversationHistory(myLanguageCode(), companionLanguageCode());
+        const myLanguage = myLanguageCode();
+        const selectedCompanionLanguage = companionLanguageCode();
+        const detectCompanionLanguage = selectedCompanionLanguage === autoLanguageCode;
+        let generation = ++conversationGeneration;
+        history = createConversationHistory(myLanguage, selectedCompanionLanguage);
         setDetectedCompanionLanguage(undefined);
         setIsCompanionLanguageReady(!detectCompanionLanguage);
         setIsConnecting(true);
-        try {
-            setStatus("Requesting microphone access…");
-            await requestMicrophoneAccess();
-            const isCurrent = () => generation === conversationGeneration;
-            const onUnexpectedClose = (message: string) => {
-                if (isConversing() || isConnecting()) {
-                    setStatus(message);
-                    stopConversation();
-                }
-            };
-            const getToken = async (targetLanguageCode: string) =>
-                (await getEphemeralToken(targetLanguageCode)).match(
-                    (token) => token,
-                    (error) => {
-                        throw error;
-                    },
-                );
-            const startDetectedLanguageSession = async (languageCode: string) => {
+
+        const getToken = async (targetLanguageCode: string) =>
+            (await getEphemeralToken(targetLanguageCode)).match(
+                (token) => token,
+                (error) => {
+                    throw error;
+                },
+            );
+        const isCurrent = (sessionGeneration: number) => () => sessionGeneration === conversationGeneration;
+        const onUnexpectedClose = (sessionGeneration: number) => (message: string) => {
+            if (sessionGeneration === conversationGeneration && (isConversing() || isConnecting())) {
+                setStatus(message);
+                stopConversation();
+            }
+        };
+        const openSessions = async (sessionGeneration: number) => {
+            const current = isCurrent(sessionGeneration);
+            const unexpectedClose = onUnexpectedClose(sessionGeneration);
+            const openDetectedLanguageSession = async (languageCode: string) => {
                 try {
                     setStatus(`Detected ${languageLabel(languageCode)}. Opening your translation stream…`);
                     const token = await getToken(languageCode);
@@ -126,10 +130,10 @@ export function useConversation() {
                         targetLanguageCode: languageCode,
                         responseModalities: [Modality.AUDIO],
                         onMessage: handleMyLanguageMessage,
-                        isCurrent,
-                        onUnexpectedClose,
+                        isCurrent: current,
+                        onUnexpectedClose: unexpectedClose,
                     });
-                    if (!isCurrent()) {
+                    if (!current()) {
                         session.close();
                         return;
                     }
@@ -138,66 +142,105 @@ export function useConversation() {
                     setStatus("Listening to your companion.");
                 } catch (error) {
                     console.error("[Vox] Could not start the detected language stream", error);
-                    onUnexpectedClose(
+                    unexpectedClose(
                         error instanceof Error ? error.message : "Could not start the detected language stream.",
                     );
                 }
             };
 
-            setStatus("Requesting short-lived Gemini tokens…");
             if (detectCompanionLanguage) {
-                const token = await getToken(myLanguageCode());
-                setStatus("Opening companion translation session…");
+                const token = await getToken(myLanguage);
+                if (!current()) return;
                 companionLanguageSession = await connectLiveTranslate({
                     token,
-                    targetLanguageCode: myLanguageCode(),
+                    targetLanguageCode: myLanguage,
                     responseModalities: [Modality.TEXT],
                     onMessage: (message) => {
                         handleCompanionLanguageMessage(message);
                         const languageCode = message.serverContent?.inputTranscription?.languageCode;
                         if (languageCode && !detectedCompanionLanguage()) {
                             setDetectedCompanionLanguage(languageCode);
-                            void startDetectedLanguageSession(languageCode);
+                            void openDetectedLanguageSession(languageCode);
                         }
                     },
-                    isCurrent,
-                    onUnexpectedClose,
+                    isCurrent: current,
+                    onUnexpectedClose: unexpectedClose,
                 });
-            } else {
-                setStatus("Opening two live translation sessions…");
-                const [myToken, companionToken] = await Promise.all([
-                    getToken(companionLanguageCode()),
-                    getToken(myLanguageCode()),
-                ]);
-                const [mySession, companionSession] = await Promise.all([
-                    connectLiveTranslate({
-                        token: myToken,
-                        targetLanguageCode: companionLanguageCode(),
-                        responseModalities: [Modality.AUDIO],
-                        onMessage: handleMyLanguageMessage,
-                        isCurrent,
-                        onUnexpectedClose,
-                    }),
-                    connectLiveTranslate({
-                        token: companionToken,
-                        targetLanguageCode: myLanguageCode(),
-                        responseModalities: [Modality.TEXT],
-                        onMessage: handleCompanionLanguageMessage,
-                        isCurrent,
-                        onUnexpectedClose,
-                    }),
-                ]);
-                myLanguageSession = mySession;
-                companionLanguageSession = companionSession;
-            }
-            if (!isCurrent()) {
-                myLanguageSession?.close();
-                companionLanguageSession?.close();
+                const detectedLanguage = detectedCompanionLanguage();
+                if (detectedLanguage) await openDetectedLanguageSession(detectedLanguage);
                 return;
             }
+
+            const [myToken, companionToken] = await Promise.all([
+                getToken(selectedCompanionLanguage),
+                getToken(myLanguage),
+            ]);
+            if (!current()) return;
+            const [mySession, companionSession] = await Promise.all([
+                connectLiveTranslate({
+                    token: myToken,
+                    targetLanguageCode: selectedCompanionLanguage,
+                    responseModalities: [Modality.AUDIO],
+                    onMessage: handleMyLanguageMessage,
+                    isCurrent: current,
+                    onUnexpectedClose: unexpectedClose,
+                }),
+                connectLiveTranslate({
+                    token: companionToken,
+                    targetLanguageCode: myLanguage,
+                    responseModalities: [Modality.TEXT],
+                    onMessage: handleCompanionLanguageMessage,
+                    isCurrent: current,
+                    onUnexpectedClose: unexpectedClose,
+                }),
+            ]);
+            if (!current()) {
+                mySession.close();
+                companionSession.close();
+                return;
+            }
+            myLanguageSession = mySession;
+            companionLanguageSession = companionSession;
+        };
+        const scheduleReconnection = () => {
+            if (reconnectionTimer !== undefined) window.clearTimeout(reconnectionTimer);
+            reconnectionTimer = window.setTimeout(() => void reconnect(), 110_000);
+        };
+        const reconnect = async () => {
+            if (!isConversing()) return;
+
+            generation = ++conversationGeneration;
+            myLanguageSession?.close();
+            companionLanguageSession?.close();
+            myLanguageSession = undefined;
+            companionLanguageSession = undefined;
+            setIsCompanionLanguageReady(false);
+            setPhase("listening");
+            setStatus("Refreshing translation connection…");
+            try {
+                await openSessions(generation);
+                if (!isCurrent(generation)()) return;
+                setIsCompanionLanguageReady(Boolean(myLanguageSession));
+                setStatus(
+                    myLanguageSession ? "Listening to your companion." : "Listening for your companion’s language…",
+                );
+                scheduleReconnection();
+            } catch (error) {
+                console.error("[Vox] Could not refresh translation connection", error);
+                setStatus(error instanceof Error ? error.message : "Could not refresh the translation connection.");
+                stopConversation();
+            }
+        };
+
+        try {
+            setStatus("Requesting microphone access…");
+            await requestMicrophoneAccess();
+            setStatus("Requesting short-lived Gemini tokens…");
+            await openSessions(generation);
+            if (!isCurrent(generation)()) return;
             setStatus("Starting microphone stream…");
             await startMicrophoneStream();
-            if (!isCurrent()) {
+            if (!isCurrent(generation)()) {
                 stopConversation();
                 return;
             }
@@ -206,6 +249,7 @@ export function useConversation() {
             setStatus(
                 detectCompanionLanguage ? "Listening for your companion’s language…" : "Listening to your companion.",
             );
+            scheduleReconnection();
         } catch (error) {
             console.error("[Vox] Could not start conversation", error);
             setStatus(error instanceof Error ? error.message : "Could not start the conversation.");
@@ -232,6 +276,10 @@ export function useConversation() {
 
     function stopConversation() {
         conversationGeneration += 1;
+        if (reconnectionTimer !== undefined) {
+            window.clearTimeout(reconnectionTimer);
+            reconnectionTimer = undefined;
+        }
         const wasConversing = isConversing();
         setIsConversing(false);
         setPhase("listening");
