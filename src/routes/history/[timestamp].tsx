@@ -1,5 +1,5 @@
 import { A, useParams } from "@solidjs/router";
-import { createMemo, For, Show } from "solid-js";
+import { createSignal, For, onMount, Show } from "solid-js";
 import Navigation from "~/components/Navigation";
 import { type ConversationMessage, getConversationHistory } from "~/features/conversation/conversationHistory";
 
@@ -11,11 +11,15 @@ function getMessageText(message: ConversationMessage) {
 
 export default function ConversationHistoryDetailPage() {
     const params = useParams<{ timestamp: string }>();
-    const conversation = createMemo(() => {
+    const [conversation, setConversation] = createSignal<ReturnType<typeof getConversationHistory>[number]>();
+
+    onMount(() => {
         const timestamp = Number(params.timestamp);
-        return Number.isSafeInteger(timestamp)
-            ? getConversationHistory().find((savedConversation) => savedConversation.timestamp === timestamp)
-            : undefined;
+        if (Number.isSafeInteger(timestamp)) {
+            setConversation(
+                getConversationHistory().find((savedConversation) => savedConversation.timestamp === timestamp),
+            );
+        }
     });
 
     return (

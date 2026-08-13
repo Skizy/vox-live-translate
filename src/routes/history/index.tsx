@@ -1,5 +1,5 @@
 import { A } from "@solidjs/router";
-import { createMemo, For, Show } from "solid-js";
+import { createSignal, For, onMount, Show } from "solid-js";
 import Navigation from "~/components/Navigation";
 import { getConversationHistory } from "~/features/conversation/conversationHistory";
 
@@ -8,7 +8,9 @@ function formatConversationDate(timestamp: number) {
 }
 
 export default function ConversationHistoryPage() {
-    const conversations = createMemo(() => [...getConversationHistory()].reverse());
+    const [conversations, setConversations] = createSignal<ReturnType<typeof getConversationHistory>>([]);
+
+    onMount(() => setConversations([...getConversationHistory()].reverse()));
 
     return (
         <main class="app-shell">
