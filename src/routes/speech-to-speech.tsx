@@ -252,6 +252,9 @@ export default function SpeechToSpeechPage() {
                 <p class="eyebrow">Translation mode</p>
                 <h1 id="speech-to-speech-title">Speech to speech</h1>
                 <p class="lede">Speak naturally and hear the live translation in your selected language.</p>
+                <p class="headphones-warning" role="note">
+                    <strong>Headphones or earphones required.</strong> This mode only works when they are connected.
+                </p>
 
                 <label class="field" for="speech-to-speech-language">
                     <span>Translation language</span>
