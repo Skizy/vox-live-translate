@@ -5,6 +5,7 @@ const navigationItems = [
     { to: "/conversation", label: "Conversation" },
     { to: "/speech-to-text", label: "Speech to text" },
     { to: "/speech-to-speech", label: "Speech to speech" },
+    { to: "/recorder", label: "Recorder" },
 ] as const;
 
 export default function Navigation() {

@@ -17,6 +17,11 @@ const translationModes = [
         title: "Speech to speech",
         description: "Translate speech directly into spoken audio.",
     },
+    {
+        href: "/recorder",
+        title: "Recorder",
+        description: "Record a timestamped translation transcript on this device.",
+    },
 ] as const;
 
 export default function HomePage() {

@@ -9,6 +9,7 @@ A Solid PWA for live speech translation with Gemini Live Translate.
 - **Two-way conversation mode** — choose your language and your companion's language; read your companion's translated speech and hold **I am speaking** to send your speech for translated audio playback.
 - **Supported target languages** — English, Russian, German, Ukrainian, and Serbian.
 - **Conversation history** — browse previous conversation transcripts, including their language pair, timestamp, speakers, original text, and translations.
+- **Translation recorder** — capture a timestamped text translation, title it after stopping, and save it locally for later review or download.
 - **Google sign-in and secure sessions** — all app routes require an authenticated Google account; sessions are stored server-side and delivered in HTTP-only cookies.
 - **PWA assets** — includes a web app manifest, service worker, icons, and Android asset links.
 
@@ -19,6 +20,7 @@ A Solid PWA for live speech translation with Gemini Live Translate.
 | Speech to text   | Microphone                                               | Live translated text                                     |
 | Speech to speech | Microphone                                               | Streamed translated audio                                |
 | Conversation     | Companion's microphone audio or your push-to-talk speech | Companion translation as text; your translation as audio |
+| Recorder         | Microphone                                               | Timestamped translated text saved locally on stop        |
 
 Conversation history is stored only in the browser's `localStorage`. It is not synced to the signed-in account, so clearing browser storage removes the locally saved entries.
 
@@ -51,29 +53,29 @@ flowchart TD
 
 ### Application layers
 
-| Area                           | Location                                                                                          | Responsibilities                                                                                                                                                                |
-| ------------------------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Application shell and routing  | `src/app.tsx`, `src/routes/`, `src/middleware.ts`                                                 | Registers the service worker, renders SolidStart file routes, and enforces authentication before protected pages and API routes execute.                                        |
-| Translation experiences        | `src/routes/speech-to-text.tsx`, `src/routes/speech-to-speech.tsx`, `src/routes/conversation.tsx` | Own page-level state, acquire the microphone, create Gemini sessions, render translations, and release browser resources when a mode stops or unmounts.                         |
-| Shared live-translation client | `src/lib/liveTranslation.ts`                                                                      | Requests an ephemeral token from the server and opens a constrained Gemini Live connection in the browser.                                                                      |
-| Audio pipeline                 | `src/features/audio/`                                                                             | Captures mono microphone audio through an `AudioWorklet`, converts float samples to 16-bit PCM, base64-encodes PCM for Gemini, and decodes returned PCM for Web Audio playback. |
-| Conversation domain            | `src/features/conversation/`                                                                      | Coordinates two translation streams, routes microphone data according to the active speaker, queues translated audio, and records local transcripts.                            |
-| Authentication and persistence | `src/server/auth.ts`, `src/server/db/`                                                            | Verifies Google credentials, creates and destroys sessions, and accesses PostgreSQL through Drizzle ORM.                                                                        |
-| PWA/static assets              | `public/`                                                                                         | Provides the manifest, service worker, icons, and Android Digital Asset Links document.                                                                                         |
+| Area                           | Location                                                                                                                     | Responsibilities                                                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application shell and routing  | `src/app.tsx`, `src/routes/`, `src/middleware.ts`                                                                            | Registers the service worker, renders SolidStart file routes, and enforces authentication before protected pages and API routes execute.                                        |
+| Translation experiences        | `src/routes/speech-to-text.tsx`, `src/routes/speech-to-speech.tsx`, `src/routes/conversation.tsx`, `src/routes/recorder.tsx` | Own page-level state, acquire the microphone, create Gemini sessions, render translations, and release browser resources when a mode stops or unmounts.                         |
+| Shared live-translation client | `src/lib/liveTranslation.ts`                                                                                                 | Requests an ephemeral token from the server and opens a constrained Gemini Live connection in the browser.                                                                      |
+| Audio pipeline                 | `src/features/audio/`                                                                                                        | Captures mono microphone audio through an `AudioWorklet`, converts float samples to 16-bit PCM, base64-encodes PCM for Gemini, and decodes returned PCM for Web Audio playback. |
+| Conversation domain            | `src/features/conversation/`                                                                                                 | Coordinates two translation streams, routes microphone data according to the active speaker, queues translated audio, and records local transcripts.                            |
+| Authentication and persistence | `src/server/auth.ts`, `src/server/db/`                                                                                       | Verifies Google credentials, creates and destroys sessions, and accesses PostgreSQL through Drizzle ORM.                                                                        |
+| PWA/static assets              | `public/`                                                                                                                    | Provides the manifest, service worker, icons, and Android Digital Asset Links document.                                                                                         |
 
 ### Routes and access control
 
 `src/routes/` is the route contract. Page files provide the translation and history screens; route handlers implement authentication and API endpoints.
 
-| Endpoint or route                                                          | Purpose                                                                                                | Access                                            |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| `/login`                                                                   | Loads Google Identity Services with the configured OAuth client ID.                                    | Public                                            |
-| `POST /auth-callback`                                                      | Checks Google's CSRF token, verifies the Google ID token, upserts the user, and creates a Vox session. | Public callback                                   |
-| `POST /auth/logout`                                                        | Deletes the current server-side session and clears its cookie.                                         | Public endpoint; safely handles an absent session |
-| `GET /api/auth-config`                                                     | Returns the public Google OAuth client ID used by the login page.                                      | Public                                            |
-| `GET /api/session`                                                         | Returns the authenticated user's display name.                                                         | Authenticated                                     |
-| `POST /api/get-ephemeral-token`                                            | Mints a one-use, constrained Gemini Live token for a requested target language.                        | Authenticated                                     |
-| `/`, `/speech-to-text`, `/speech-to-speech`, `/conversation`, `/history/*` | Translation and transcript UI.                                                                         | Authenticated                                     |
+| Endpoint or route                                                                       | Purpose                                                                                                | Access                                            |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `/login`                                                                                | Loads Google Identity Services with the configured OAuth client ID.                                    | Public                                            |
+| `POST /auth-callback`                                                                   | Checks Google's CSRF token, verifies the Google ID token, upserts the user, and creates a Vox session. | Public callback                                   |
+| `POST /auth/logout`                                                                     | Deletes the current server-side session and clears its cookie.                                         | Public endpoint; safely handles an absent session |
+| `GET /api/auth-config`                                                                  | Returns the public Google OAuth client ID used by the login page.                                      | Public                                            |
+| `GET /api/session`                                                                      | Returns the authenticated user's display name.                                                         | Authenticated                                     |
+| `POST /api/get-ephemeral-token`                                                         | Mints a one-use, constrained Gemini Live token for a requested target language.                        | Authenticated                                     |
+| `/`, `/speech-to-text`, `/speech-to-speech`, `/conversation`, `/recorder`, `/history/*` | Translation and transcript UI.                                                                         | Authenticated                                     |
 
 The request middleware permits only login/callback, PWA/static resources, and the auth configuration endpoint without a session. Unauthenticated API calls receive `401`; unauthenticated page requests redirect to `/login` with the original destination in `next`.
 
@@ -110,12 +112,13 @@ Conversation mode normally opens two Live sessions: one translates the local spe
 
 ### Stored data
 
-| Store                                               | Contents                                                                                  | Lifetime and scope                                                                                                          |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL `users`                                  | Google subject ID, email, name, picture, and timestamps.                                  | Server-side account record.                                                                                                 |
-| PostgreSQL `sessions`                               | Hashed session token, associated user, creation time, and expiry.                         | Server-side; expires after seven days or is deleted at logout.                                                              |
-| PostgreSQL `issued_ephemeral_tokens`                | Gemini ephemeral token identifier, issuing user, target language, issue time, and expiry. | Server-side issuance record; tokens themselves are short-lived.                                                             |
-| Browser `localStorage` (`vox.conversation-history`) | Conversation timestamp, selected languages, original transcriptions, and translations.    | Per browser/device only; not associated with or synchronized to the signed-in account. Clearing browser storage removes it. |
+| Store                                               | Contents                                                                                                            | Lifetime and scope                                                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL `users`                                  | Google subject ID, email, name, picture, and timestamps.                                                            | Server-side account record.                                                                                                 |
+| PostgreSQL `sessions`                               | Hashed session token, associated user, creation time, and expiry.                                                   | Server-side; expires after seven days or is deleted at logout.                                                              |
+| PostgreSQL `issued_ephemeral_tokens`                | Gemini ephemeral token identifier, issuing user, target language, issue time, and expiry.                           | Server-side issuance record; tokens themselves are short-lived.                                                             |
+| Browser `localStorage` (`vox.conversation-history`) | Conversation timestamp, selected languages, original transcriptions, and translations.                              | Per browser/device only; not associated with or synchronized to the signed-in account. Clearing browser storage removes it. |
+| Browser IndexedDB (`VoxRecordingStorage`)           | Recorder metadata (ID, timestamp, target language, optional title) and text transcript payloads in separate stores. | Per browser/device only; not associated with or synchronized to the signed-in account. Clearing browser data removes it.    |
 
 ### Production topology
 

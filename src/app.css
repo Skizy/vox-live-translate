@@ -556,6 +556,217 @@ h1 {
     font-size: 0.9rem;
 }
 
+.recorder-shell {
+    width: min(1180px, calc(100% - 2rem));
+}
+
+.recorder-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+    gap: 1.25rem;
+    align-items: stretch;
+}
+
+.recorder-page h1 {
+    font-size: clamp(2.8rem, 9vw, 5.5rem);
+}
+
+.recorder-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+}
+
+.recorder-toggle,
+.modal-close-button {
+    display: grid;
+    place-items: center;
+    border: 0;
+    cursor: pointer;
+}
+
+.recorder-toggle {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    background: oklch(71.4% 0.203 305.504);
+    color: #3a0935;
+    font-size: 1.25rem;
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease;
+}
+
+.recorder-toggle:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: oklch(67% 0.21 305.504);
+}
+
+.recorder-toggle:disabled {
+    cursor: wait;
+    opacity: 0.62;
+}
+
+.recording-duration {
+    color: #ead6e6;
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.recording-preview {
+    min-height: 9rem;
+    max-height: 19rem;
+    margin: 1.25rem 0 0;
+    overflow: auto;
+    padding: 1.25rem;
+    border: 1px solid oklch(71.4% 0.203 305.504 / 0.1);
+    border-radius: 1.25rem;
+    background: rgb(28 21 29 / 0.62);
+    color: #ae99aa;
+    line-height: 1.65;
+    white-space: pre-wrap;
+}
+
+.recording-save-form {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.field input {
+    width: 100%;
+    min-height: 3.5rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid #b89eaf;
+    border-radius: 0.9rem;
+    background: #2d2230;
+    color: #f5e8f3;
+}
+
+.field input:focus-visible,
+.recorder-toggle:focus-visible,
+.modal-close-button:focus-visible,
+.recording-list-item:focus-visible {
+    outline: 3px solid oklch(71.4% 0.203 305.504 / 0.62);
+    outline-offset: 3px;
+}
+
+.recordings-sidebar {
+    padding: 1.5rem;
+    border: 1px solid oklch(71.4% 0.203 305.504 / 0.1);
+    border-radius: 2rem;
+    background: rgb(37 27 37 / 0.58);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.12);
+    backdrop-filter: blur(20px);
+}
+
+.recordings-sidebar h2,
+.recording-modal h2 {
+    margin: 0 0 1.25rem;
+    color: #fff0fb;
+    font-size: 1.35rem;
+    letter-spacing: -0.03em;
+}
+
+.recordings-list {
+    display: grid;
+    gap: 0.75rem;
+    max-height: 35rem;
+    overflow: auto;
+}
+
+.recording-list-item {
+    display: grid;
+    gap: 0.25rem;
+    width: 100%;
+    padding: 0.9rem;
+    border: 1px solid oklch(71.4% 0.203 305.504 / 0.1);
+    border-radius: 0.9rem;
+    background: rgb(44 34 46 / 0.58);
+    color: #b9a4b5;
+    cursor: pointer;
+    text-align: left;
+}
+
+.recording-list-item:hover {
+    border-color: oklch(71.4% 0.203 305.504 / 0.42);
+    background: #332633;
+}
+
+.recording-list-item span {
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.recording-list-item strong {
+    margin-top: 0.25rem;
+    color: #f7eaf4;
+    font-size: 0.95rem;
+}
+
+.recording-modal-backdrop {
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(10 6 10 / 0.68);
+}
+
+.recording-modal {
+    width: min(100%, 48rem);
+    max-height: min(85svh, 52rem);
+    padding: clamp(1.5rem, 5vw, 2.5rem);
+    overflow: auto;
+    border: 1px solid oklch(71.4% 0.203 305.504 / 0.25);
+    border-radius: 1.5rem;
+    background: #2d2130;
+    box-shadow: 0 24px 64px rgb(0 0 0 / 0.4);
+}
+
+.recording-modal-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.recording-modal-heading .eyebrow {
+    margin-bottom: 0.4rem;
+}
+
+.modal-close-button {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: rgb(255 216 248 / 0.12);
+    color: #f7eaf4;
+    font-size: 1.6rem;
+}
+
+.recording-text {
+    min-height: 12rem;
+    margin: 0 0 1.5rem;
+    overflow-wrap: anywhere;
+    color: #f7eaf4;
+    font: inherit;
+    line-height: 1.65;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 780px) {
+    .recorder-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .recordings-sidebar {
+        border-radius: 1.25rem;
+    }
+}
+
 @media (max-width: 520px) {
     .app-shell {
         width: 100%;
