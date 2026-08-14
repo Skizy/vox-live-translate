@@ -1,3 +1,4 @@
+import { A } from "@solidjs/router";
 import Navigation from "~/components/Navigation";
 import { ConversationControls } from "~/features/conversation/ConversationControls";
 import { LanguageFields } from "~/features/conversation/LanguageFields";
@@ -11,8 +12,15 @@ export default function ConversationPage() {
         <main class="app-shell">
             <Navigation />
             <section class="translator" aria-labelledby="app-title">
-                <p class="eyebrow">Two-way live speech translation</p>
-                <h1 id="app-title">Vox</h1>
+                <div class="conversation-page-heading">
+                    <div>
+                        <p class="eyebrow">Two-way live speech translation</p>
+                        <h1 id="app-title">Vox</h1>
+                    </div>
+                    <A class="conversation-history-link" href="/history">
+                        History
+                    </A>
+                </div>
                 <p class="lede">
                     Choose both languages to translate your companion’s speech as text and your speech as audio.
                 </p>

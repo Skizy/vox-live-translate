@@ -73,9 +73,61 @@ select {
     gap: 0.35rem;
 }
 
+.account-menu {
+    position: relative;
+}
+
+.avatar-button {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    place-items: center;
+    border-radius: 50%;
+    background: oklch(71.4% 0.203 305.504 / 0.18);
+    color: #ffe9fb;
+    cursor: pointer;
+    list-style: none;
+}
+
+.avatar-button::-webkit-details-marker {
+    display: none;
+}
+
+.avatar-button svg {
+    width: 1.4rem;
+    fill: currentcolor;
+}
+
+.avatar-button:hover,
+.account-menu[open] .avatar-button {
+    background: oklch(71.4% 0.203 305.504 / 0.32);
+}
+
+.avatar-button:focus-visible,
+.sign-out-button:focus-visible {
+    outline: 3px solid oklch(71.4% 0.203 305.504 / 0.62);
+    outline-offset: 3px;
+}
+
+.account-menu-content {
+    position: absolute;
+    z-index: 1;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    display: grid;
+    gap: 0.5rem;
+    min-width: 12rem;
+    padding: 0.75rem;
+    border: 1px solid oklch(71.4% 0.203 305.504 / 0.2);
+    border-radius: 1rem;
+    background: #2c222e;
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.28);
+}
+
 .user-display-name {
     max-width: 12rem;
     overflow: hidden;
+    padding: 0.35rem 0.5rem;
     color: #dcc8d8;
     font-size: 0.875rem;
     font-weight: 600;
@@ -84,24 +136,21 @@ select {
 }
 
 .sign-out-button {
+    width: 100%;
     padding: 0.65rem 0.85rem;
     border: 0;
-    border-radius: 999px;
+    border-radius: 0.65rem;
     background: transparent;
     color: #dcc8d8;
     cursor: pointer;
     font-size: 0.875rem;
     font-weight: 600;
+    text-align: left;
 }
 
 .sign-out-button:hover {
     background: oklch(71.4% 0.203 305.504 / 0.18);
     color: #ffe9fb;
-}
-
-.sign-out-button:focus-visible {
-    outline: 3px solid oklch(71.4% 0.203 305.504 / 0.62);
-    outline-offset: 3px;
 }
 
 button {
@@ -119,6 +168,8 @@ button {
 }
 
 .page-navigation {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -156,19 +207,23 @@ button {
     margin-left: auto;
 }
 
-.utility-link {
-    position: relative;
-    margin-left: 0;
+.mobile-mode-menu,
+.mobile-history-back-link {
+    display: none;
 }
 
-.utility-link::before {
-    position: absolute;
-    top: 0.55rem;
-    bottom: 0.55rem;
-    left: -0.5rem;
-    width: 1px;
-    background: rgb(255 216 248 / 0.2);
-    content: "";
+.mobile-history-back-link {
+    padding: 0.65rem 0.85rem;
+    border-radius: 999px;
+    color: #dcc8d8;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.mobile-history-back-link:hover {
+    background: oklch(71.4% 0.203 305.504 / 0.18);
+    color: #ffe9fb;
 }
 
 .navigation-link {
@@ -196,9 +251,41 @@ button {
 .navigation-link:focus-visible,
 .mode-link:focus-visible,
 .history-item:focus-visible,
-.back-link:focus-visible {
+.back-link:focus-visible,
+.conversation-history-link:focus-visible,
+.mobile-history-back-link:focus-visible {
     outline: 3px solid oklch(71.4% 0.203 305.504 / 0.62);
     outline-offset: 3px;
+}
+
+.conversation-page-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.conversation-history-link {
+    padding: 0.65rem 0.85rem;
+    border-radius: 999px;
+    color: #dcc8d8;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.conversation-history-link:hover {
+    background: oklch(71.4% 0.203 305.504 / 0.18);
+    color: #ffe9fb;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
 }
 
 .translator {
@@ -775,24 +862,36 @@ h1 {
     }
 
     .page-navigation {
-        align-items: flex-start;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        align-items: center;
         gap: 0.65rem;
         border-width: 0 0 1px;
         border-radius: 0;
     }
 
     .navigation-links {
-        justify-content: flex-start;
-        margin-left: 0;
-    }
-
-    .utility-link {
-        margin-left: 0;
-    }
-
-    .utility-link::before {
         display: none;
+    }
+
+    .mobile-mode-menu,
+    .mobile-history-back-link {
+        display: block;
+    }
+
+    .mobile-mode-menu select {
+        max-width: 10rem;
+        padding: 0.65rem 2rem 0.65rem 0.85rem;
+        border: 1px solid oklch(71.4% 0.203 305.504 / 0.25);
+        border-radius: 999px;
+        background: #2c222e;
+        color: #f7eaf4;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .conversation-page-heading {
+        align-items: center;
     }
 
     .translator {
