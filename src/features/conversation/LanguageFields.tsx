@@ -1,43 +1,69 @@
-import type { Accessor } from "solid-js";
-import { autoLanguageCode, languageOptions } from "./types";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { autoLanguageCode, languageLabel, languageOptions } from "./types";
 
 type LanguageFieldsProps = {
-    myLanguageCode: Accessor<string>;
+    myLanguageCode: string;
     setMyLanguageCode: (value: string) => void;
-    companionLanguageCode: Accessor<string>;
+    companionLanguageCode: string;
     setCompanionLanguageCode: (value: string) => void;
-    disabled: Accessor<boolean>;
+    disabled: boolean;
 };
 
-export function LanguageFields(props: LanguageFieldsProps) {
+export function LanguageFields({
+    myLanguageCode,
+    setMyLanguageCode,
+    companionLanguageCode,
+    setCompanionLanguageCode,
+    disabled,
+}: LanguageFieldsProps) {
     return (
-        <div class="language-fields">
-            <label class="field" for="my-language-select">
+        <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium" htmlFor="my-language-select">
                 <span>My Language</span>
-                <select
-                    id="my-language-select"
-                    value={props.myLanguageCode()}
-                    disabled={props.disabled()}
-                    onInput={(event) => props.setMyLanguageCode(event.currentTarget.value)}
+                <Select
+                    value={myLanguageCode}
+                    onValueChange={(value) => value && setMyLanguageCode(value)}
+                    disabled={disabled}
                 >
-                    {languageOptions.map(([code, label]) => (
-                        <option value={code}>{label}</option>
-                    ))}
-                </select>
+                    <SelectTrigger id="my-language-select" className="w-full">
+                        <SelectValue>{(value) => (value ? languageLabel(value) : "Select a language")}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            {languageOptions.map(([code, label]) => (
+                                <SelectItem key={code} value={code}>
+                                    {label}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
             </label>
-            <label class="field" for="companion-language-select">
+            <label className="grid gap-2 text-sm font-medium" htmlFor="companion-language-select">
                 <span>Companion Language</span>
-                <select
-                    id="companion-language-select"
-                    value={props.companionLanguageCode()}
-                    disabled={props.disabled()}
-                    onInput={(event) => props.setCompanionLanguageCode(event.currentTarget.value)}
+                <Select
+                    value={companionLanguageCode}
+                    onValueChange={(value) => value && setCompanionLanguageCode(value)}
+                    disabled={disabled}
                 >
-                    <option value={autoLanguageCode}>Auto</option>
-                    {languageOptions.map(([code, label]) => (
-                        <option value={code}>{label}</option>
-                    ))}
-                </select>
+                    <SelectTrigger id="companion-language-select" className="w-full">
+                        <SelectValue>
+                            {(value) =>
+                                value === autoLanguageCode ? "Auto" : value ? languageLabel(value) : "Select a language"
+                            }
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectItem value={autoLanguageCode}>Auto</SelectItem>
+                            {languageOptions.map(([code, label]) => (
+                                <SelectItem key={code} value={code}>
+                                    {label}
+                                </SelectItem>
+                            ))}
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
             </label>
         </div>
     );

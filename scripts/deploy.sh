@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Deploy the locally built Nitro output to the production host.
+# Deploy the locally built TanStack Start output to the production host.
 set -eu
 
 HOST="${DEPLOY_HOST:-cont}"

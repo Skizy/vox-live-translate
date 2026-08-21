@@ -1,44 +1,49 @@
-import { A } from "@solidjs/router";
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import Navigation from "~/components/Navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { getConversationHistory } from "~/features/conversation/conversationHistory";
 
+export const Route = createFileRoute("/history/")({ component: ConversationHistoryPage });
 function formatConversationDate(timestamp: number) {
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
 }
-
-export default function ConversationHistoryPage() {
-    const [conversations, setConversations] = createSignal<ReturnType<typeof getConversationHistory>>([]);
-
-    onMount(() => setConversations([...getConversationHistory()].reverse()));
-
+function ConversationHistoryPage() {
+    const [conversations, setConversations] = useState<ReturnType<typeof getConversationHistory>>([]);
+    useEffect(() => setConversations([...getConversationHistory()].reverse()), []);
     return (
-        <main class="app-shell">
+        <main className="min-h-svh">
             <Navigation />
-            <section class="translator history-page" aria-labelledby="history-title">
-                <p class="eyebrow">Saved conversations</p>
-                <h1 id="history-title">History</h1>
-                <Show
-                    when={conversations().length > 0}
-                    fallback={<p class="empty-history">Your completed conversations will appear here.</p>}
-                >
-                    <div class="history-list">
-                        <For each={conversations()}>
-                            {(conversation) => (
-                                <A class="history-item" href={`/history/${conversation.timestamp}`}>
-                                    <span class="history-item-date">
-                                        {formatConversationDate(conversation.timestamp)}
-                                    </span>
-                                    <strong>
+            <section className="mx-auto w-full max-w-5xl space-y-6 p-6">
+                <div>
+                    <p className="text-sm text-muted-foreground">Saved conversations</p>
+                    <h1 className="text-3xl font-semibold">History</h1>
+                </div>
+                {conversations.length ? (
+                    <div className="grid gap-3">
+                        {conversations.map((conversation) => (
+                            <Link
+                                key={conversation.timestamp}
+                                to="/history/$timestamp"
+                                params={{ timestamp: String(conversation.timestamp) }}
+                            >
+                                <Card className="transition-colors hover:bg-accent">
+                                    <CardHeader>
+                                        <CardTitle className="text-base">
+                                            {formatConversationDate(conversation.timestamp)}
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="text-sm text-muted-foreground">
                                         {conversation.myLanguage.toUpperCase()} ↔{" "}
                                         {conversation.companionLanguage.toUpperCase()}
-                                    </strong>
-                                    <span>{conversation.conversation.length} messages</span>
-                                </A>
-                            )}
-                        </For>
+                                    </CardContent>
+                                </Card>
+                            </Link>
+                        ))}
                     </div>
-                </Show>
+                ) : (
+                    <p className="text-muted-foreground">Your completed conversations will appear here.</p>
+                )}
             </section>
         </main>
     );

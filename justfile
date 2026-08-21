@@ -2,15 +2,15 @@
 install:
     bun install
 
-# Start the SolidStart development server
+# Start the TanStack Start development server
 dev:
     bun run dev
 
-# Build the SolidStart/Nitro production application
+# Build the TanStack Start production application
 build:
     bun run build
 
-# Run the generated Nitro production server
+# Run the generated TanStack Start/Nitro production server
 start:
     bun run start
 

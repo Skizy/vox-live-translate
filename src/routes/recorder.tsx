@@ -1,9 +1,23 @@
+/** @jsxImportSource react */
+
 import { GoogleGenAI, Modality, type Session } from "@google/genai";
-import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import Navigation from "~/components/Navigation";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { ScrollArea } from "~/components/ui/scroll-area";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { requestMicrophoneStream, sendMicrophoneAudio, startMicrophoneCapture } from "~/features/audio/microphone";
+import { languageLabel } from "~/features/conversation/types";
 import { getRecordings, getRecordingText, type RecordingMetadata, saveRecording } from "~/features/recordings/storage";
 import { getEphemeralToken, MODEL } from "~/lib/liveTranslation";
+
+export const Route = createFileRoute("/recorder")({
+    component: RecorderPage,
+});
 
 const languageOptions = [
     ["en", "English"],
@@ -42,135 +56,159 @@ function recentSentences(text: string) {
 }
 
 export default function RecorderPage() {
-    const [targetLanguageCode, setTargetLanguageCode] = createSignal("en");
-    const [status, setStatus] = createSignal("Ready to record a translation.");
-    const [translation, setTranslation] = createSignal("");
-    const [isRecording, setIsRecording] = createSignal(false);
-    const [isConnecting, setIsConnecting] = createSignal(false);
-    const [elapsedSeconds, setElapsedSeconds] = createSignal(0);
-    const [title, setTitle] = createSignal("");
-    const [awaitingTitle, setAwaitingTitle] = createSignal(false);
-    const [recordings, setRecordings] = createSignal<RecordingMetadata[]>([]);
-    const [selectedRecording, setSelectedRecording] = createSignal<RecordingMetadata>();
-    const [selectedRecordingText, setSelectedRecordingText] = createSignal("");
+    const [targetLanguageCode, setTargetLanguageCode] = useState("en");
+    const [status, setStatus] = useState("Ready to record a translation.");
+    const [translation, setTranslation] = useState("");
+    const [isRecording, setIsRecording] = useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [title, setTitle] = useState("");
+    const [awaitingTitle, setAwaitingTitle] = useState(false);
+    const [recordings, setRecordings] = useState<RecordingMetadata[]>([]);
+    const [selectedRecording, setSelectedRecording] = useState<RecordingMetadata>();
+    const [selectedRecordingText, setSelectedRecordingText] = useState("");
 
-    let session: Session | undefined;
-    let microphoneStream: MediaStream | undefined;
-    let stopMicrophoneCapture: (() => void) | undefined;
-    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    let durationTimer: ReturnType<typeof setInterval> | undefined;
-    let startTimestamp = 0;
-    let nextTimestampMinute = 1;
-    let recordingStartedAt = 0;
-    let generation = 0;
-    let sessionGeneration = 0;
+    const targetLanguageCodeRef = useRef(targetLanguageCode);
+    const isConnectingRef = useRef(isConnecting);
+    const isRecordingRef = useRef(isRecording);
+    const sessionRef = useRef<Session | undefined>(undefined);
+    const microphoneStreamRef = useRef<MediaStream | undefined>(undefined);
+    const stopMicrophoneCaptureRef = useRef<(() => void) | undefined>(undefined);
+    const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const durationTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+    const refreshSessionRef = useRef<((attempt: number) => void) | undefined>(undefined);
+    const startTimestampRef = useRef(0);
+    const nextTimestampMinuteRef = useRef(1);
+    const recordingStartedAtRef = useRef(0);
+    const generationRef = useRef(0);
+    const sessionGenerationRef = useRef(0);
 
-    async function loadRecordings() {
+    const updateConnectionState = useCallback((connecting: boolean) => {
+        isConnectingRef.current = connecting;
+        setIsConnecting(connecting);
+    }, []);
+
+    const updateRecordingState = useCallback((recording: boolean) => {
+        isRecordingRef.current = recording;
+        setIsRecording(recording);
+    }, []);
+
+    const loadRecordings = useCallback(async () => {
         try {
             setRecordings(await getRecordings());
         } catch (error) {
             console.error("[Vox] Could not load recording list", error);
             setStatus("Could not load saved recordings.");
         }
-    }
+    }, []);
 
-    function appendTimestamp(timestamp: number) {
+    const appendTimestamp = useCallback((timestamp: number) => {
         setTranslation((current) => `${current}${current ? "\n" : ""}[${formatTimestamp(timestamp)}]\n`);
-    }
+    }, []);
 
-    function clearTimers() {
-        if (refreshTimer !== undefined) clearTimeout(refreshTimer);
-        if (durationTimer !== undefined) clearInterval(durationTimer);
-        refreshTimer = undefined;
-        durationTimer = undefined;
-    }
+    const clearTimers = useCallback(() => {
+        if (refreshTimerRef.current !== undefined) clearTimeout(refreshTimerRef.current);
+        if (durationTimerRef.current !== undefined) clearInterval(durationTimerRef.current);
+        refreshTimerRef.current = undefined;
+        durationTimerRef.current = undefined;
+    }, []);
 
-    function resetRefreshTimer(attempt: number) {
-        if (refreshTimer !== undefined) clearTimeout(refreshTimer);
-        refreshTimer = setTimeout(() => {
-            refreshTimer = undefined;
-            void refreshSession(attempt);
-        }, 110_000);
-    }
-
-    function releaseResources() {
+    const releaseResources = useCallback(() => {
         clearTimers();
-        stopMicrophoneCapture?.();
-        stopMicrophoneCapture = undefined;
-        microphoneStream?.getTracks().forEach((track) => {
+        stopMicrophoneCaptureRef.current?.();
+        stopMicrophoneCaptureRef.current = undefined;
+        microphoneStreamRef.current?.getTracks().forEach((track) => {
             track.stop();
         });
-        microphoneStream = undefined;
-        session?.close();
-        session = undefined;
-    }
+        microphoneStreamRef.current = undefined;
+        sessionRef.current?.close();
+        sessionRef.current = undefined;
+    }, [clearTimers]);
 
-    function stopRecording(statusMessage = "Recording stopped.") {
-        generation += 1;
-        const wasActive = isConnecting() || isRecording();
-        setIsConnecting(false);
-        setIsRecording(false);
-        releaseResources();
-        if (wasActive) {
-            setAwaitingTitle(true);
-            setStatus(statusMessage);
-        }
-    }
+    const stopRecording = useCallback(
+        (statusMessage = "Recording stopped.") => {
+            generationRef.current += 1;
+            const wasActive = isConnectingRef.current || isRecordingRef.current;
+            updateConnectionState(false);
+            updateRecordingState(false);
+            releaseResources();
+            if (wasActive) {
+                setAwaitingTitle(true);
+                setStatus(statusMessage);
+            }
+        },
+        [releaseResources, updateConnectionState, updateRecordingState],
+    );
 
-    async function openLiveSession(attempt: number, connection: number) {
-        const token = await getEphemeralToken(targetLanguageCode());
-        const ai = new GoogleGenAI({ apiKey: token });
-        return ai.live.connect({
-            model: MODEL,
-            config: {
-                responseModalities: [Modality.TEXT],
-                translationConfig: { targetLanguageCode: targetLanguageCode(), echoTargetLanguage: false },
-            },
-            callbacks: {
-                onmessage: (message) => {
-                    if (attempt !== generation || connection !== sessionGeneration) return;
-                    const text = message.serverContent?.outputTranscription?.text;
-                    if (text) setTranslation((current) => current + text);
+    const openLiveSession = useCallback(
+        async (attempt: number, connection: number) => {
+            const token = await getEphemeralToken(targetLanguageCodeRef.current);
+            const ai = new GoogleGenAI({ apiKey: token });
+            return ai.live.connect({
+                model: MODEL,
+                config: {
+                    responseModalities: [Modality.TEXT],
+                    translationConfig: { targetLanguageCode: targetLanguageCodeRef.current, echoTargetLanguage: false },
                 },
-                onclose: (event) => {
-                    if (attempt !== generation || connection !== sessionGeneration) return;
-                    const reason = event.reason ? `: ${event.reason}` : "";
-                    stopRecording(`Translation connection closed (${event.code}${reason}).`);
+                callbacks: {
+                    onmessage: (message) => {
+                        if (attempt !== generationRef.current || connection !== sessionGenerationRef.current) return;
+                        const text = message.serverContent?.outputTranscription?.text;
+                        if (text) setTranslation((current) => current + text);
+                    },
+                    onclose: (event) => {
+                        if (attempt !== generationRef.current || connection !== sessionGenerationRef.current) return;
+                        const reason = event.reason ? `: ${event.reason}` : "";
+                        stopRecording(`Translation connection closed (${event.code}${reason}).`);
+                    },
+                    onerror: (event) => console.error("[Vox] Recorder session error", event),
                 },
-                onerror: (event) => console.error("[Vox] Recorder session error", event),
-            },
-        });
-    }
+            });
+        },
+        [stopRecording],
+    );
+
+    const resetRefreshTimer = useCallback((attempt: number) => {
+        if (refreshTimerRef.current !== undefined) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(() => {
+            refreshTimerRef.current = undefined;
+            refreshSessionRef.current?.(attempt);
+        }, 110_000);
+    }, []);
 
     async function refreshSession(attempt: number) {
-        if (attempt !== generation || !isRecording()) return;
-        const connection = ++sessionGeneration;
+        if (attempt !== generationRef.current || !isRecordingRef.current) return;
+        const connection = ++sessionGenerationRef.current;
         try {
             const refreshedSession = await openLiveSession(attempt, connection);
-            if (attempt !== generation || connection !== sessionGeneration) {
+            if (attempt !== generationRef.current || connection !== sessionGenerationRef.current) {
                 refreshedSession.close();
                 return;
             }
-            const previousSession = session;
-            session = refreshedSession;
+            const previousSession = sessionRef.current;
+            sessionRef.current = refreshedSession;
             previousSession?.close();
             resetRefreshTimer(attempt);
         } catch (error) {
             console.error("[Vox] Could not refresh recorder translation", error);
-            if (attempt === generation && connection === sessionGeneration) {
+            if (attempt === generationRef.current && connection === sessionGenerationRef.current) {
                 stopRecording(error instanceof Error ? error.message : "Could not refresh the recording connection.");
             }
         }
     }
 
+    refreshSessionRef.current = (attempt) => {
+        void refreshSession(attempt);
+    };
+
     async function startRecording() {
-        const attempt = ++generation;
-        const connection = ++sessionGeneration;
+        const attempt = ++generationRef.current;
+        const connection = ++sessionGenerationRef.current;
         const now = Date.now();
-        recordingStartedAt = now;
-        startTimestamp = now;
-        nextTimestampMinute = 1;
-        setIsConnecting(true);
+        recordingStartedAtRef.current = now;
+        startTimestampRef.current = now;
+        nextTimestampMinuteRef.current = 1;
+        updateConnectionState(true);
         setAwaitingTitle(false);
         setTitle("");
         setElapsedSeconds(0);
@@ -179,56 +217,70 @@ export default function RecorderPage() {
         setStatus("Requesting microphone access…");
 
         try {
-            microphoneStream = await requestMicrophoneStream();
+            const stream = await requestMicrophoneStream();
+            if (attempt !== generationRef.current || connection !== sessionGenerationRef.current) {
+                stream.getTracks().forEach((track) => {
+                    track.stop();
+                });
+                return;
+            }
+            microphoneStreamRef.current = stream;
             setStatus("Opening live translation…");
             const connectedSession = await openLiveSession(attempt, connection);
-            if (attempt !== generation || connection !== sessionGeneration) {
+            if (attempt !== generationRef.current || connection !== sessionGenerationRef.current) {
                 connectedSession.close();
+                stream.getTracks().forEach((track) => {
+                    track.stop();
+                });
                 return;
             }
-            session = connectedSession;
-            stopMicrophoneCapture = await startMicrophoneCapture(microphoneStream, (audio) =>
-                sendMicrophoneAudio(session, audio),
+            sessionRef.current = connectedSession;
+            const stopCapture = await startMicrophoneCapture(stream, (audio) =>
+                sendMicrophoneAudio(sessionRef.current, audio),
             );
-            if (attempt !== generation || connection !== sessionGeneration) {
-                stopMicrophoneCapture();
+            if (attempt !== generationRef.current || connection !== sessionGenerationRef.current) {
+                stopCapture();
                 connectedSession.close();
+                stream.getTracks().forEach((track) => {
+                    track.stop();
+                });
                 return;
             }
-            durationTimer = setInterval(() => {
-                const seconds = Math.floor((Date.now() - startTimestamp) / 1000);
+            stopMicrophoneCaptureRef.current = stopCapture;
+            durationTimerRef.current = setInterval(() => {
+                const seconds = Math.floor((Date.now() - startTimestampRef.current) / 1000);
                 setElapsedSeconds(seconds);
-                while (seconds >= nextTimestampMinute * 60) {
-                    appendTimestamp(startTimestamp + nextTimestampMinute * 60_000);
-                    nextTimestampMinute += 1;
+                while (seconds >= nextTimestampMinuteRef.current * 60) {
+                    appendTimestamp(startTimestampRef.current + nextTimestampMinuteRef.current * 60_000);
+                    nextTimestampMinuteRef.current += 1;
                 }
             }, 1_000);
-            setIsConnecting(false);
-            setIsRecording(true);
+            updateConnectionState(false);
+            updateRecordingState(true);
             setStatus("Recording and translating…");
             resetRefreshTimer(attempt);
         } catch (error) {
             console.error("[Vox] Could not start recording", error);
-            if (attempt === generation && connection === sessionGeneration) {
+            if (attempt === generationRef.current && connection === sessionGenerationRef.current) {
                 stopRecording(error instanceof Error ? error.message : "Could not start recording.");
             }
         }
     }
 
     async function saveCurrentRecording() {
-        if (!translation().trim()) {
+        if (!translation.trim()) {
             setAwaitingTitle(false);
             setStatus("Nothing was translated, so no recording was saved.");
             return;
         }
         const metadata: RecordingMetadata = {
             id: createRecordingId(),
-            timestamp: recordingStartedAt,
-            targetLanguageCode: targetLanguageCode(),
-            title: title().trim() || undefined,
+            timestamp: recordingStartedAtRef.current,
+            targetLanguageCode,
+            title: title.trim() || undefined,
         };
         try {
-            await saveRecording(metadata, translation());
+            await saveRecording(metadata, translation);
             setAwaitingTitle(false);
             setStatus("Recording saved on this device.");
             await loadRecordings();
@@ -249,145 +301,157 @@ export default function RecorderPage() {
     }
 
     function downloadRecording() {
-        const recording = selectedRecording();
-        if (!recording) return;
-        const titleSuffix = recording.title ? ` (${recording.title})` : "";
-        const fileName = `Translation Recording from ${formatFilenameTimestamp(recording.timestamp)}${titleSuffix}.txt`;
+        if (!selectedRecording) return;
+        const titleSuffix = selectedRecording.title ? ` (${selectedRecording.title})` : "";
+        const fileName = `Translation Recording from ${formatFilenameTimestamp(selectedRecording.timestamp)}${titleSuffix}.txt`;
+        const url = URL.createObjectURL(new Blob([selectedRecordingText], { type: "text/plain;charset=utf-8" }));
         const link = document.createElement("a");
-        link.href = URL.createObjectURL(new Blob([selectedRecordingText()], { type: "text/plain;charset=utf-8" }));
+        link.href = url;
         link.download = fileName;
         link.click();
-        URL.revokeObjectURL(link.href);
+        URL.revokeObjectURL(url);
     }
 
-    onMount(() => void loadRecordings());
-    onCleanup(() => releaseResources());
+    useEffect(() => {
+        void loadRecordings();
+        return () => {
+            generationRef.current += 1;
+            releaseResources();
+        };
+    }, [loadRecordings, releaseResources]);
 
     return (
-        <main class="app-shell recorder-shell">
+        <main className="min-h-svh bg-background">
             <Navigation />
-            <div class="recorder-layout">
-                <section class="translator feature-page recorder-page" aria-labelledby="recorder-title">
-                    <p class="eyebrow">Translation mode</p>
-                    <h1 id="recorder-title">Recorder</h1>
-                    <p class="lede">Record a live translation and keep a timestamped text transcript on this device.</p>
-                    <label class="field" for="recorder-language">
+            <div className="mx-auto grid w-full max-w-6xl gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <section
+                    className="flex flex-col gap-5 rounded-xl border bg-card p-6 text-card-foreground shadow-sm"
+                    aria-labelledby="recorder-title"
+                >
+                    <p className="text-sm font-medium text-muted-foreground">Translation mode</p>
+                    <h1 id="recorder-title" className="text-3xl font-bold tracking-tight">
+                        Recorder
+                    </h1>
+                    <p className="text-muted-foreground">
+                        Record a live translation and keep a timestamped text transcript on this device.
+                    </p>
+                    <label className="grid gap-2 text-sm font-medium" htmlFor="recorder-language">
                         <span>Translation language</span>
-                        <select
-                            id="recorder-language"
-                            value={targetLanguageCode()}
-                            disabled={isConnecting() || isRecording()}
-                            onInput={(event) => setTargetLanguageCode(event.currentTarget.value)}
+                        <Select
+                            value={targetLanguageCode}
+                            disabled={isConnecting || isRecording}
+                            onValueChange={(value) => {
+                                if (!value) return;
+                                targetLanguageCodeRef.current = value;
+                                setTargetLanguageCode(value);
+                            }}
                         >
-                            <For each={languageOptions}>{([code, label]) => <option value={code}>{label}</option>}</For>
-                        </select>
+                            <SelectTrigger id="recorder-language" className="w-full">
+                                <SelectValue>
+                                    {(value) => (value ? languageLabel(value) : "Select a language")}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    {languageOptions.map(([code, label]) => (
+                                        <SelectItem key={code} value={code}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
                     </label>
-                    <div class="recorder-controls">
-                        <button
-                            class="recorder-toggle"
+                    <div className="flex items-center gap-3">
+                        <Button
+                            size="icon-lg"
                             type="button"
-                            disabled={isConnecting()}
-                            onClick={() => (isRecording() ? stopRecording() : void startRecording())}
-                            aria-label={isRecording() ? "Stop recording" : "Start recording"}
+                            disabled={isConnecting}
+                            onClick={() => (isRecording ? stopRecording() : void startRecording())}
+                            aria-label={isRecording ? "Stop recording" : "Start recording"}
                         >
-                            <Show when={isRecording()} fallback={<span aria-hidden="true">▶</span>}>
-                                <span aria-hidden="true">■</span>
-                            </Show>
-                        </button>
-                        <span class="recording-duration" aria-live="polite">
-                            {formatDuration(elapsedSeconds())}
+                            <span aria-hidden="true">{isRecording ? "■" : "▶"}</span>
+                        </Button>
+                        <span className="font-mono text-sm text-muted-foreground" aria-live="polite">
+                            {formatDuration(elapsedSeconds)}
                         </span>
                     </div>
-                    <p class="recording-preview" aria-live="polite">
-                        {recentSentences(translation()) || "Your most recent translated sentences will appear here."}
+                    <p className="min-h-24 rounded-md border bg-muted/30 p-3 text-sm" aria-live="polite">
+                        {recentSentences(translation) || "Your most recent translated sentences will appear here."}
                     </p>
-                    <p class="status" role="status" aria-live="polite">
-                        {status()}
+                    <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+                        {status}
                     </p>
-                    <Show when={awaitingTitle()}>
+                    {awaitingTitle && (
                         <form
-                            class="recording-save-form"
+                            className="grid gap-4 rounded-lg border p-4"
                             onSubmit={(event) => {
                                 event.preventDefault();
                                 void saveCurrentRecording();
                             }}
                         >
-                            <label class="field" for="recording-title">
+                            <label className="grid gap-2 text-sm font-medium" htmlFor="recording-title">
                                 <span>Recording title (optional)</span>
-                                <input
+                                <Input
                                     id="recording-title"
-                                    value={title()}
-                                    onInput={(event) => setTitle(event.currentTarget.value)}
+                                    value={title}
+                                    onChange={(event) => setTitle(event.currentTarget.value)}
                                 />
                             </label>
-                            <button class="primary-button" type="submit">
-                                Save recording
-                            </button>
+                            <Button type="submit">Save recording</Button>
                         </form>
-                    </Show>
+                    )}
                 </section>
-                <aside class="recordings-sidebar" aria-label="Previous recordings">
-                    <p class="eyebrow">On this device</p>
-                    <h2>Previous recordings</h2>
-                    <div class="recordings-list">
-                        <Show
-                            when={recordings().length > 0}
-                            fallback={<p class="empty-history">No recordings saved yet.</p>}
-                        >
-                            <For each={recordings()}>
-                                {(recording) => (
-                                    <button
-                                        class="recording-list-item"
-                                        type="button"
-                                        onClick={() => void openRecording(recording)}
-                                    >
-                                        <span>{formatTimestamp(recording.timestamp)}</span>
-                                        <span>
-                                            {languageOptions.find(
-                                                ([code]) => code === recording.targetLanguageCode,
-                                            )?.[1] ?? recording.targetLanguageCode}
-                                        </span>
-                                        <Show when={recording.title}>
-                                            <strong>{recording.title}</strong>
-                                        </Show>
-                                    </button>
-                                )}
-                            </For>
-                        </Show>
+                <aside
+                    className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm"
+                    aria-label="Previous recordings"
+                >
+                    <p className="text-sm font-medium text-muted-foreground">On this device</p>
+                    <h2 className="mt-1 text-lg font-semibold">Previous recordings</h2>
+                    <div className="mt-4 grid gap-2">
+                        {recordings.length > 0 ? (
+                            recordings.map((recording) => (
+                                <Button
+                                    variant="outline"
+                                    className="grid h-auto w-full justify-start gap-1 rounded-2xl p-3 text-left"
+                                    type="button"
+                                    key={recording.id}
+                                    onClick={() => void openRecording(recording)}
+                                >
+                                    <span>{formatTimestamp(recording.timestamp)}</span>
+                                    <span>
+                                        {languageOptions.find(([code]) => code === recording.targetLanguageCode)?.[1] ??
+                                            recording.targetLanguageCode}
+                                    </span>
+                                    {recording.title && <strong>{recording.title}</strong>}
+                                </Button>
+                            ))
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No recordings saved yet.</p>
+                        )}
                     </div>
                 </aside>
             </div>
-            <Show when={selectedRecording()}>
-                {(recording) => (
-                    <div class="recording-modal-backdrop">
-                        <section
-                            class="recording-modal"
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="recording-modal-title"
-                        >
-                            <div class="recording-modal-heading">
-                                <div>
-                                    <p class="eyebrow">{formatTimestamp(recording().timestamp)}</p>
-                                    <h2 id="recording-modal-title">{recording().title || "Translation recording"}</h2>
-                                </div>
-                                <button
-                                    class="modal-close-button"
-                                    type="button"
-                                    onClick={() => setSelectedRecording()}
-                                    aria-label="Close recording"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                            <pre class="recording-text">{selectedRecordingText()}</pre>
-                            <button class="primary-button" type="button" onClick={downloadRecording}>
+            <Dialog open={Boolean(selectedRecording)} onOpenChange={(open) => !open && setSelectedRecording(undefined)}>
+                {selectedRecording && (
+                    <DialogContent className="max-w-2xl" showCloseButton>
+                        <DialogHeader>
+                            <p className="text-sm text-muted-foreground">
+                                {formatTimestamp(selectedRecording.timestamp)}
+                            </p>
+                            <DialogTitle>{selectedRecording.title || "Translation recording"}</DialogTitle>
+                        </DialogHeader>
+                        <ScrollArea className="h-96 rounded-2xl border bg-muted/30">
+                            <pre className="whitespace-pre-wrap p-3 text-sm">{selectedRecordingText}</pre>
+                        </ScrollArea>
+                        <DialogFooter>
+                            <Button type="button" onClick={downloadRecording}>
                                 Save to device
-                            </button>
-                        </section>
-                    </div>
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
                 )}
-            </Show>
+            </Dialog>
         </main>
     );
 }

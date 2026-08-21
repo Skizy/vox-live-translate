@@ -1,7 +1,17 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
   "files": {
-    "includes": ["**", "!node_modules", "!bun.lock", "!.output", "!.zed", "!drizzle"]
+    "includes": [
+      "**",
+      "!node_modules",
+      "!bun.lock",
+      "!dist",
+      "!src/components/ui",
+      "!src/routeTree.gen.ts",
+      "!.output",
+      "!.zed",
+      "!drizzle"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -13,6 +23,11 @@
     "enabled": true,
     "rules": {
       "preset": "recommended"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   },
   "javascript": {

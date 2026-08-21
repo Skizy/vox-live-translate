@@ -1,5 +1,16 @@
-import { A, useLocation, useNavigate } from "@solidjs/router";
-import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { Link, useLocation } from "@tanstack/react-router";
+import { Menu, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button } from "~/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 
 const navigationItems = [
     { to: "/conversation", label: "Conversation" },
@@ -10,75 +21,86 @@ const navigationItems = [
 
 export default function Navigation() {
     const location = useLocation();
-    const navigate = useNavigate();
-    const isActive = (path: string) => createMemo(() => location.pathname === path);
-    const isHistoryPage = createMemo(() => location.pathname.startsWith("/history"));
-    const [displayName, setDisplayName] = createSignal<string>();
 
-    onMount(() => {
+    const [displayName, setDisplayName] = useState<string>();
+    const isHistoryPage = location.pathname.startsWith("/history");
+
+    useEffect(() => {
         void fetch("/api/session")
-            .then(async (response) => {
-                if (!response.ok) {
-                    return undefined;
-                }
-                return (await response.json()) as { name?: string };
-            })
+            .then(async (response) => (response.ok ? ((await response.json()) as { name?: string }) : undefined))
             .then((session) => setDisplayName(session?.name));
-    });
+    }, []);
 
     return (
-        <nav class="page-navigation" aria-label="Translation modes">
-            <A class="brand-link" href="/">
+        <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
+            <Link to="/" className="text-lg font-semibold tracking-tight">
                 Vox
-            </A>
-            <div class="navigation-links">
+            </Link>
+            <nav className="hidden items-center gap-1 md:flex" aria-label="Translation modes">
                 {navigationItems.map(({ to, label }) => (
-                    <A
-                        class="navigation-link"
-                        activeClass="active"
-                        href={to}
-                        aria-current={isActive(to)() ? "page" : undefined}
+                    <Link
+                        key={to}
+                        to={to}
+                        className="rounded-2xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        activeProps={{ className: "bg-accent text-accent-foreground" }}
                     >
                         {label}
-                    </A>
+                    </Link>
                 ))}
-            </div>
-            <Show
-                when={isHistoryPage()}
-                fallback={
-                    <label class="mobile-mode-menu">
-                        <span class="visually-hidden">Translation mode</span>
-                        <select
-                            aria-label="Translation mode"
-                            value={location.pathname}
-                            onChange={(event) => void navigate(event.currentTarget.value)}
+            </nav>
+            <div className="flex items-center gap-2">
+                {isHistoryPage ? (
+                    <Link to="/conversation" className="text-sm text-muted-foreground hover:text-foreground md:hidden">
+                        Back to translator
+                    </Link>
+                ) : (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="md:hidden"
+                                    aria-label="Choose translation mode"
+                                />
+                            }
                         >
-                            {navigationItems.map(({ to, label }) => (
-                                <option value={to}>{label}</option>
-                            ))}
-                        </select>
-                    </label>
-                }
-            >
-                <A class="mobile-history-back-link" href="/conversation">
-                    Back to translator
-                </A>
-            </Show>
-            <details class="account-menu">
-                <summary class="avatar-button" aria-label="Account menu">
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                        <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.01-8 4.5V20h16v-1.5c0-2.49-3.58-4.5-8-4.5Z" />
-                    </svg>
-                </summary>
-                <div class="account-menu-content">
-                    <Show when={displayName()}>{(name) => <span class="user-display-name">{name()}</span>}</Show>
-                    <form action="/auth/logout" method="post">
-                        <button class="sign-out-button" type="submit">
-                            Sign out
-                        </button>
-                    </form>
-                </div>
-            </details>
-        </nav>
+                            <Menu />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                            <DropdownMenuGroup>
+                                {navigationItems.map(({ to, label }) => (
+                                    <DropdownMenuItem
+                                        key={to}
+                                        className={
+                                            location.pathname === to ? "bg-accent text-accent-foreground" : undefined
+                                        }
+                                        render={<Link to={to} className="w-full" />}
+                                    >
+                                        {label}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
+                <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="Account menu" />}>
+                        <UserRound />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuGroup>
+                            <DropdownMenuLabel>{displayName ?? "Account"}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <form action="/auth/logout" method="post">
+                                <DropdownMenuItem render={<button className="w-full" type="submit" />}>
+                                    Sign out
+                                </DropdownMenuItem>
+                            </form>
+                        </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        </header>
     );
 }

@@ -1,45 +1,52 @@
-import type { Accessor } from "solid-js";
+import { Button } from "~/components/ui/button";
 import type { ConversationMode, ConversationPhase } from "./types";
 
 type ConversationControlsProps = {
-    phase: Accessor<ConversationPhase>;
-    translation: Accessor<string>;
-    conversationMode: Accessor<ConversationMode>;
-    isCompanionLanguageReady: Accessor<boolean>;
+    phase: ConversationPhase;
+    translation: string;
+    conversationMode: ConversationMode;
+    isCompanionLanguageReady: boolean;
     beginSpeaking: () => void;
     finishSpeaking: () => void;
 };
 
-export function ConversationControls(props: ConversationControlsProps) {
+export function ConversationControls({
+    phase,
+    translation,
+    conversationMode,
+    isCompanionLanguageReady,
+    beginSpeaking,
+    finishSpeaking,
+}: ConversationControlsProps) {
     return (
-        <section class="conversation" aria-label="Conversation controls">
-            <button
-                class="speaking-button"
+        <section className="space-y-4 rounded-lg border bg-muted/30 p-4" aria-label="Conversation controls">
+            <Button
+                className="w-full sm:w-auto"
                 type="button"
-                disabled={props.phase() !== "listening" || !props.isCompanionLanguageReady()}
+                disabled={phase !== "listening" || !isCompanionLanguageReady}
                 onPointerDown={(event) => {
                     event.currentTarget.setPointerCapture(event.pointerId);
-                    props.beginSpeaking();
+                    beginSpeaking();
                 }}
                 onPointerUp={(event) => {
-                    props.finishSpeaking();
+                    finishSpeaking();
                     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                         event.currentTarget.releasePointerCapture(event.pointerId);
                     }
                 }}
-                onPointerCancel={props.finishSpeaking}
-                onLostPointerCapture={props.finishSpeaking}
+                onPointerCancel={finishSpeaking}
+                onLostPointerCapture={finishSpeaking}
             >
-                {props.phase() === "speaking" ? "Release to translate" : "I am speaking"}
-            </button>
-            <p class="speaking-hint">
-                {props.conversationMode() === "companion-audio"
+                {phase === "speaking" ? "Release to translate" : "I am speaking"}
+            </Button>
+            <p className="text-sm text-muted-foreground">
+                {conversationMode === "companion-audio"
                     ? "Hold while you speak. Your translated text appears after you release."
                     : "Hold while you speak. Your translated audio plays after you release."}
             </p>
-            <p class="translation" aria-live="polite">
-                {props.translation() ||
-                    (props.conversationMode() === "companion-audio"
+            <p className="min-h-24 rounded-md border bg-background p-3 text-sm" aria-live="polite">
+                {translation ||
+                    (conversationMode === "companion-audio"
                         ? "Your translation will appear here."
                         : "Your companion’s translation will appear here.")}
             </p>

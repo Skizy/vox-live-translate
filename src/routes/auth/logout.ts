@@ -1,7 +1,14 @@
-import type { APIEvent } from "@solidjs/start/server";
+import { createFileRoute } from "@tanstack/react-router";
 import { destroySession } from "~/server/auth";
 
-export async function POST(event: APIEvent) {
-    await destroySession(event);
-    return new Response(null, { status: 303, headers: { Location: "/login" } });
-}
+export const Route = createFileRoute("/auth/logout")({
+    server: {
+        handlers: {
+            POST: async ({ request }) =>
+                new Response(null, {
+                    status: 303,
+                    headers: { Location: "/login", "Set-Cookie": await destroySession(request) },
+                }),
+        },
+    },
+});

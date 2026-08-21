@@ -1,6 +1,6 @@
-# Vox SolidStart
+# Vox Live Translate
 
-A Solid PWA for live speech translation with Gemini Live Translate.
+A React and TanStack Start PWA for live speech translation with Gemini Live Translate.
 
 ## Features
 
@@ -33,21 +33,21 @@ Conversation history is stored only in the browser's `localStorage`. It is not s
 
 ## Architecture
 
-Vox is a SolidStart progressive web app. SolidStart provides file-based UI and HTTP routes; its Nitro output runs as the Node-compatible server in production. The server owns long-lived credentials and account state, while the browser owns microphone capture, Gemini Live connections, audio playback, and local transcript history.
+Vox is a React progressive web app built with TanStack Start. TanStack Start provides file-based UI and HTTP routes; its Nitro build runs as the Bun-compatible server in production. The server owns long-lived credentials and account state, while the browser owns microphone capture, Gemini Live connections, audio playback, and local transcript history.
 
 ```mermaid
 flowchart TD
     Browser[Browser PWA]
-    SolidStart[SolidStart and Nitro server]
+    TanStackStart[TanStack Start server]
     Google[Google Identity Services]
     Gemini[Gemini Live Translate]
     Postgres[(PostgreSQL)]
 
-    Browser -->|Sign-in credential| SolidStart
-    SolidStart -->|Verify ID token| Google
-    SolidStart -->|Users, sessions, issued tokens| Postgres
-    Browser -->|Authenticated request for short-lived token| SolidStart
-    SolidStart -->|Create constrained ephemeral token| Gemini
+    Browser -->|Sign-in credential| TanStackStart
+    TanStackStart -->|Verify ID token| Google
+    TanStackStart -->|Users, sessions, issued tokens| Postgres
+    Browser -->|Authenticated request for short-lived token| TanStackStart
+    TanStackStart -->|Create constrained ephemeral token| Gemini
     Browser -->|PCM audio and live responses using ephemeral token| Gemini
 ```
 
@@ -55,7 +55,7 @@ flowchart TD
 
 | Area                           | Location                                                                                                                     | Responsibilities                                                                                                                                                                |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Application shell and routing  | `src/app.tsx`, `src/routes/`, `src/middleware.ts`                                                                            | Registers the service worker, renders SolidStart file routes, and enforces authentication before protected pages and API routes execute.                                        |
+| Application shell and routing  | `src/routes/__root.tsx`, `src/routes/`, `src/start.ts`                                                                       | Registers the service worker, renders TanStack file routes, and enforces authentication before protected pages and API routes execute.                                          |
 | Translation experiences        | `src/routes/speech-to-text.tsx`, `src/routes/speech-to-speech.tsx`, `src/routes/conversation.tsx`, `src/routes/recorder.tsx` | Own page-level state, acquire the microphone, create Gemini sessions, render translations, and release browser resources when a mode stops or unmounts.                         |
 | Shared live-translation client | `src/lib/liveTranslation.ts`                                                                                                 | Requests an ephemeral token from the server and opens a constrained Gemini Live connection in the browser.                                                                      |
 | Audio pipeline                 | `src/features/audio/`                                                                                                        | Captures mono microphone audio through an `AudioWorklet`, converts float samples to 16-bit PCM, base64-encodes PCM for Gemini, and decodes returned PCM for Web Audio playback. |
@@ -122,7 +122,7 @@ Conversation mode normally opens two Live sessions: one translates the local spe
 
 ### Production topology
 
-The generated Nitro server runs in the `app` container. Compose starts PostgreSQL privately in the `db` container, runs Drizzle migrations once through `migrate` after the database health check succeeds, and starts `app` only after migration completes. The app exposes `APP_PORT` (default `5080`) on `127.0.0.1`, allowing an external Nginx instance to terminate TLS and proxy requests without directly exposing the container port. PostgreSQL persists in the named `vox-live-translate-postgres-data` volume.
+The generated TanStack Start/Nitro server runs in the `app` container. Compose starts PostgreSQL privately in the `db` container, runs Drizzle migrations once through `migrate` after the database health check succeeds, and starts `app` only after migration completes. The app exposes `APP_PORT` (default `5080`) on `127.0.0.1`, allowing an external Nginx instance to terminate TLS and proxy requests without directly exposing the container port. PostgreSQL persists in the named `vox-live-translate-postgres-data` volume.
 
 ## Setup
 
@@ -149,11 +149,11 @@ just db-migrate
 just deploy
 ```
 
-The generated production server is a Nitro Node-compatible application and is launched with Bun by `just start`.
+The generated production server is a TanStack Start/Nitro Bun-compatible application and is launched with Bun by `just start`.
 
 ## Deployment
 
-`just deploy` builds the app locally, compresses `.output`, `Dockerfile`, and `compose.yaml` into a tarball, uploads it over SCP, and starts the `vox-live-translate` Compose stack on `cont` at `~/deploy/vox-live-translate`. The remote server must have Docker with the Compose plugin, `tar`, and OpenSSL installed. The app is configured with `--restart unless-stopped`, publishes the selected port (default `5080`) only on `127.0.0.1` for Nginx to proxy, and runs alongside a private PostgreSQL 17 container.
+`just deploy` builds the app locally, compresses `dist`, `Dockerfile`, and `compose.yaml` into a tarball, uploads it over SCP, and starts the `vox-live-translate` Compose stack on `cont` at `~/deploy/vox-live-translate`. The remote server must have Docker with the Compose plugin, `tar`, and OpenSSL installed. The app is configured with `--restart unless-stopped`, publishes the selected port (default `5080`) only on `127.0.0.1` for Nginx to proxy, and runs alongside a private PostgreSQL 17 container.
 
 PostgreSQL data persists in the `vox-live-translate-postgres-data` Docker volume. On the first deployment, a random database credential is stored in `~/deploy/vox-live-translate/database.env` with owner-only permissions; it remains separate from the application `.env`. The one-shot `migrate` Compose service applies Drizzle migrations before the app starts. If a local `.env` exists, deployment uploads it to the remote deployment directory. Otherwise, an existing remote `.env` is retained; deployment stops with a clear error if neither exists. Inspect services with `ssh cont 'docker compose -p vox-live-translate ps'`, the app with `ssh cont 'docker logs --tail 100 vox-live-translate'`, migrations with `ssh cont 'docker logs vox-live-translate-migrate'`, or Postgres with `ssh cont 'docker logs --tail 100 vox-live-translate-db'`. Override the destination or port when needed:
 
