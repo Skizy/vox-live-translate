@@ -2,6 +2,7 @@
 
 import { GoogleGenAI, Modality, type Session } from "@google/genai";
 import { createFileRoute } from "@tanstack/react-router";
+import { PlayIcon, SquareIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import Navigation from "~/components/Navigation";
@@ -370,7 +371,7 @@ export default function RecorderPage() {
                             onClick={() => (isRecording ? stopRecording() : void startRecording())}
                             aria-label={isRecording ? "Stop recording" : "Start recording"}
                         >
-                            <span aria-hidden="true">{isRecording ? "■" : "▶"}</span>
+                            {isRecording ? <SquareIcon aria-hidden="true" /> : <PlayIcon aria-hidden="true" />}
                         </Button>
                         <span className="font-mono text-sm text-muted-foreground" aria-live="polite">
                             {formatDuration(elapsedSeconds)}
