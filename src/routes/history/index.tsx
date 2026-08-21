@@ -30,12 +30,15 @@ function ConversationHistoryPage() {
                                 <Card className="transition-colors hover:bg-accent">
                                     <CardHeader>
                                         <CardTitle className="text-base">
-                                            {formatConversationDate(conversation.timestamp)}
+                                            {conversation.label || formatConversationDate(conversation.timestamp)}
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="text-sm text-muted-foreground">
-                                        {conversation.myLanguage.toUpperCase()} ↔{" "}
-                                        {conversation.companionLanguage.toUpperCase()}
+                                        {conversation.label && <p>{formatConversationDate(conversation.timestamp)}</p>}
+                                        <p>
+                                            {conversation.myLanguage.toUpperCase()} ↔{" "}
+                                            {conversation.companionLanguage.toUpperCase()}
+                                        </p>
                                     </CardContent>
                                 </Card>
                             </Link>

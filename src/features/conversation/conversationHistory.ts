@@ -6,6 +6,7 @@ export type ConversationMessage = {
 
 export type StoredConversation = {
     timestamp: number;
+    label?: string;
     myLanguage: string;
     companionLanguage: string;
     conversation: ConversationMessage[];
@@ -34,6 +35,16 @@ function writeHistory(history: StoredConversation[]) {
     }
 }
 
+export function updateConversationLabel(timestamp: number, label: string) {
+    const history = getConversationHistory();
+    const conversation = history.find((item) => item.timestamp === timestamp);
+    if (!conversation) return false;
+
+    conversation.label = label.trim() || undefined;
+    writeHistory(history);
+    return true;
+}
+
 export function createConversationHistory(myLanguage: string, companionLanguage: string) {
     const conversation: StoredConversation = {
         timestamp: Date.now(),
@@ -52,6 +63,7 @@ export function createConversationHistory(myLanguage: string, companionLanguage:
     }
 
     return {
+        timestamp: conversation.timestamp,
         addInput(side: ConversationMessage["side"], text: string) {
             if (!text) return;
 

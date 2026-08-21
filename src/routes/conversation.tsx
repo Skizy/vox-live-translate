@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import Navigation from "~/components/Navigation";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { ConversationControls } from "~/features/conversation/ConversationControls";
+import { updateConversationLabel } from "~/features/conversation/conversationHistory";
 import { LanguageFields } from "~/features/conversation/LanguageFields";
 import { type ConversationMode, conversationModeOptions, languageLabel } from "~/features/conversation/types";
 import { useConversation } from "~/features/conversation/useConversation";
@@ -11,7 +14,13 @@ export const Route = createFileRoute("/conversation")({ component: ConversationP
 
 function ConversationPage() {
     const conversation = useConversation();
+    const [conversationLabel, setConversationLabel] = useState("");
     const controlsDisabled = conversation.isConversing || conversation.isConnecting;
+
+    function saveConversationLabel() {
+        if (conversation.lastConversationTimestamp === undefined) return;
+        updateConversationLabel(conversation.lastConversationTimestamp, conversationLabel);
+    }
 
     return (
         <main className="min-h-svh bg-background">
@@ -102,6 +111,27 @@ function ConversationPage() {
                 <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
                     {conversation.status}
                 </p>
+
+                {conversation.lastConversationTimestamp !== undefined && (
+                    <form
+                        className="flex flex-col gap-2 sm:flex-row"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            saveConversationLabel();
+                        }}
+                    >
+                        <label className="sr-only" htmlFor="conversation-label">
+                            Conversation label
+                        </label>
+                        <Input
+                            id="conversation-label"
+                            value={conversationLabel}
+                            onChange={(event) => setConversationLabel(event.target.value)}
+                            placeholder="Label this conversation (optional)"
+                        />
+                        <Button type="submit">Save label</Button>
+                    </form>
+                )}
             </section>
         </main>
     );

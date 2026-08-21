@@ -19,6 +19,7 @@ export function useConversation() {
     const [companionTranslation, setCompanionTranslation] = useState("");
     const [detectedCompanionLanguage, setDetectedCompanionLanguage] = useState<string>();
     const [isCompanionLanguageReady, setIsCompanionLanguageReady] = useState(true);
+    const [lastConversationTimestamp, setLastConversationTimestamp] = useState<number>();
 
     const myLanguageCodeRef = useRef(myLanguageCode);
     const companionLanguageCodeRef = useRef(companionLanguageCode);
@@ -185,7 +186,10 @@ export function useConversation() {
         sourceNodeRef.current = undefined;
         processorNodeRef.current = undefined;
         silentGainNodeRef.current = undefined;
-        if (wasConversing) setStatus("Conversation stopped.");
+        if (wasConversing) {
+            setLastConversationTimestamp(historyRef.current?.timestamp);
+            setStatus("Conversation stopped.");
+        }
     }, [playback, setIsConversing, setPhase, setStatus]);
 
     const startConversation = useCallback(async () => {
@@ -195,6 +199,7 @@ export function useConversation() {
         const detectCompanionLanguage = selectedCompanionLanguage === autoLanguageCode;
         let generation = ++conversationGenerationRef.current;
         historyRef.current = createConversationHistory(myLanguage, selectedCompanionLanguage);
+        setLastConversationTimestamp(undefined);
         setCompanionTranslation("");
         setDetectedLanguage(undefined);
         setIsCompanionLanguageReady(!detectCompanionLanguage);
@@ -425,6 +430,7 @@ export function useConversation() {
         companionTranslation,
         detectedCompanionLanguage,
         isCompanionLanguageReady,
+        lastConversationTimestamp,
         startConversation,
         stopConversation,
         beginSpeaking,

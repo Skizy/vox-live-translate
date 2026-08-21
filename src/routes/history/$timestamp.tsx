@@ -1,8 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import Navigation from "~/components/Navigation";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { type ConversationMessage, getConversationHistory } from "~/features/conversation/conversationHistory";
+import { Input } from "~/components/ui/input";
+import {
+    type ConversationMessage,
+    getConversationHistory,
+    updateConversationLabel,
+} from "~/features/conversation/conversationHistory";
 
 export const Route = createFileRoute("/history/$timestamp")({ component: ConversationHistoryDetailPage });
 function getMessageText(message: ConversationMessage) {
@@ -13,10 +19,14 @@ function getMessageText(message: ConversationMessage) {
 function ConversationHistoryDetailPage() {
     const { timestamp } = Route.useParams();
     const [conversation, setConversation] = useState<ReturnType<typeof getConversationHistory>[number]>();
+    const [label, setLabel] = useState("");
     useEffect(() => {
         const value = Number(timestamp);
-        if (Number.isSafeInteger(value))
-            setConversation(getConversationHistory().find((item) => item.timestamp === value));
+        if (Number.isSafeInteger(value)) {
+            const savedConversation = getConversationHistory().find((item) => item.timestamp === value);
+            setConversation(savedConversation);
+            setLabel(savedConversation?.label ?? "");
+        }
     }, [timestamp]);
     return (
         <main className="min-h-svh">
@@ -31,8 +41,30 @@ function ConversationHistoryDetailPage() {
                             <p className="text-sm text-muted-foreground">
                                 {conversation.myLanguage.toUpperCase()} ↔ {conversation.companionLanguage.toUpperCase()}
                             </p>
-                            <h1 className="text-3xl font-semibold">Conversation</h1>
+                            <h1 className="text-3xl font-semibold">{conversation.label || "Conversation"}</h1>
                         </div>
+                        <form
+                            className="flex flex-col gap-2 sm:flex-row"
+                            onSubmit={(event) => {
+                                event.preventDefault();
+                                if (updateConversationLabel(conversation.timestamp, label)) {
+                                    setConversation((current) =>
+                                        current ? { ...current, label: label.trim() || undefined } : current,
+                                    );
+                                }
+                            }}
+                        >
+                            <label className="sr-only" htmlFor="conversation-label">
+                                Conversation label
+                            </label>
+                            <Input
+                                id="conversation-label"
+                                value={label}
+                                onChange={(event) => setLabel(event.target.value)}
+                                placeholder="Label this conversation (optional)"
+                            />
+                            <Button type="submit">Save label</Button>
+                        </form>
                         <section aria-label="Conversation messages" className="space-y-3">
                             {conversation.conversation.map((message) => {
                                 const text = getMessageText(message);
